@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="sl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Naročanje – EAN + količina</title>
+<style>
+:root{
+  --bg:#f3f5f7;--card:#fff;--ink:#17212b;--muted:#6d7882;
+  --line:#d8e0e6;--dark:#24313d;--accent:#d7222f;--green:#24864b;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--ink)}
+header{
+  position:sticky;top:0;z-index:20;background:var(--dark);color:#fff;
+  padding:14px 16px;display:flex;justify-content:space-between;align-items:center
+}
+header strong{font-size:20px}
+header span{font-size:12px;color:#d9e0e6}
+main{max-width:720px;margin:auto;padding:14px 14px 110px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:15px;margin-bottom:12px}
+h1{font-size:23px;margin:0 0 7px}
+h2{font-size:18px;margin:0 0 10px}
+p{margin:0;color:var(--muted);line-height:1.4}
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+button{
+  border:0;border-radius:12px;padding:14px;font-weight:800;font-size:15px;cursor:pointer
+}
+.scan{background:var(--accent);color:#fff;min-height:76px}
+.secondary{background:#fff;border:1px solid var(--line)}
+.primary{background:var(--dark);color:#fff}
+.green{background:var(--green);color:#fff}
+.danger{background:#fde4e6;color:#a51d28}
+.formrow{display:grid;grid-template-columns:1fr 110px;gap:8px;margin-top:10px}
+input{
+  width:100%;padding:14px;border:1px solid #c8d2da;border-radius:10px;font-size:17px
+}
+label{display:block;font-size:12px;font-weight:700;margin-bottom:4px;color:#4e5b66}
+.item{
+  display:grid;grid-template-columns:1fr 94px 38px;gap:8px;align-items:center;
+  padding:11px 0;border-bottom:1px solid #edf1f4
+}
+.item:last-child{border-bottom:0}
+.ean{font-weight:900;font-size:16px;word-break:break-all}
+.small{font-size:12px;color:var(--muted);margin-top:3px}
+.qtybox{display:flex;align-items:center;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.qtybox button{padding:7px 8px;border-radius:0;background:#eef2f5}
+.qtybox b{min-width:34px;text-align:center}
+.del{padding:8px;background:#fde4e6;color:#a51d28}
+.footer{
+  position:fixed;bottom:0;left:0;right:0;z-index:30;background:#fff;border-top:1px solid var(--line);
+  padding:10px 14px calc(10px + env(safe-area-inset-bottom));display:grid;grid-template-columns:1fr 1.3fr;gap:8px
+}
+#scannerModal{
+  display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:100;
+  align-items:center;justify-content:center;padding:16px
+}
+.scanbox{width:min(520px,100%);background:#111;color:#fff;border-radius:16px;padding:12px}
+video{width:100%;max-height:58vh;border-radius:12px;background:#000}
+#status{font-size:13px;color:#cbd5dd;margin:9px 0}
+#toast{
+  display:none;position:fixed;left:50%;bottom:98px;transform:translateX(-50%);
+  z-index:200;background:#202a33;color:#fff;padding:10px 14px;border-radius:999px;font-size:13px
+}
+.counter{font-size:13px;color:var(--muted);margin-top:8px}
+@media(max-width:520px){.formrow{grid-template-columns:1fr 92px}}
+</style>
+</head>
+<body>
+<header>
+  <strong>NAROČANJE</strong>
+  <span>EAN + količina</span>
+</header>
+
+<main>
+  <section class="card">
+    <h1>Hitro skeniranje naročila</h1>
+    <p>Vsaka postavka mora imeti <b>EAN kodo</b> in <b>količino</b>. Isti EAN se ob ponovnem skenu samodejno sešteje.</p>
+  </section>
+
+  <section class="actions">
+    <button class="scan" onclick="openScanner()">📷 SKENIRAJ EAN</button>
+    <button class="secondary" onclick="document.getElementById('ean').focus()">⌨️ ROČNI VNOS</button>
+  </section>
+
+  <section class="card">
+    <h2>Dodaj artikel</h2>
+    <div class="formrow">
+      <div>
+        <label>EAN KODA *</label>
+        <input id="ean" inputmode="numeric" autocomplete="off" placeholder="npr. 3831234567890">
+      </div>
+      <div>
+        <label>KOLIČINA *</label>
+        <input id="qty" type="number" min="1" step="1" value="1">
+      </div>
+    </div>
+    <button class="primary" style="width:100%;margin-top:10px" onclick="addItem()">DODAJ NA SEZNAM</button>
+  </section>
+
+  <section class="card">
+    <h2>Seznam za naročilo</h2>
+    <div id="list"></div>
+    <div id="counter" class="counter"></div>
+  </section>
+</main>
+
+<div class="footer">
+  <button class="danger" onclick="clearAll()">POČISTI</button>
+  <button class="green" onclick="exportExcel()">IZVOZI ZA EXCEL / VASCO</button>
+</div>
+
+<div id="scannerModal">
+  <div class="scanbox">
+    <video id="video" autoplay playsinline></video>
+    <div id="status">Zaganjam kamero…</div>
+    <button class="secondary" style="width:100%" onclick="closeScanner()">ZAPRI KAMERO</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+let items = JSON.parse(localStorage.getItem('order_ean_qty') || '[]');
+let stream = null;
+let timer = null;
+
+function save(){ localStorage.setItem('order_ean_qty', JSON.stringify(items)); }
+
+function toast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.style.display='block';
+  clearTimeout(window._tt);
+  window._tt=setTimeout(()=>t.style.display='none',1800);
+}
+
+function validEAN(ean){
+  return /^[0-9]{8,14}$/.test(ean);
+}
+
+function addItem(){
+  const ean=document.getElementById('ean').value.trim();
+  const qty=parseInt(document.getElementById('qty').value,10);
+
+  if(!validEAN(ean)){
+    toast('Vnesi veljavno EAN kodo (8–14 številk).');
+    document.getElementById('ean').focus();
+    return;
+  }
+  if(!Number.isInteger(qty) || qty < 1){
+    toast('Količina mora biti najmanj 1.');
+    document.getElementById('qty').focus();
+    return;
+  }
+
+  const existing=items.find(x=>x.ean===ean);
+  if(existing) existing.qty += qty;
+  else items.push({ean, qty});
+
+  save();
+  render();
+  document.getElementById('ean').value='';
+  document.getElementById('qty').value='1';
+  document.getElementById('ean').focus();
+  toast(existing ? 'Količina pri EAN je povečana.' : 'EAN in količina sta dodana.');
+}
+
+function changeQty(i,d){
+  items[i].qty += d;
+  if(items[i].qty < 1) items[i].qty=1;
+  save();render();
+}
+function removeItem(i){items.splice(i,1);save();render();}
+function clearAll(){
+  if(!items.length)return;
+  if(confirm('Izbrišem celoten seznam?')){
+    items=[];save();render();
+  }
+}
+
+function render(){
+  const list=document.getElementById('list');
+  if(!items.length){
+    list.innerHTML='<div class="small">Seznam je prazen. Skeniraj prvi artikel.</div>';
+  }else{
+    list.innerHTML=items.map((x,i)=>`
+      <div class="item">
+        <div>
+          <div class="ean">${x.ean}</div>
+          <div class="small">EAN koda</div>
+        </div>
+        <div class="qtybox">
+          <button onclick="changeQty(${i},-1)">−</button>
+          <b>${x.qty}</b>
+          <button onclick="changeQty(${i},1)">+</button>
+        </div>
+        <button class="del" onclick="removeItem(${i})">×</button>
+      </div>`).join('');
+  }
+  const totalQty=items.reduce((s,x)=>s+x.qty,0);
+  document.getElementById('counter').textContent=
+    `${items.length} različnih EAN kod • skupaj ${totalQty} kos`;
+}
+
+function escXml(s){
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function exportExcel(){
+  if(!items.length){toast('Seznam je prazen.');return;}
+
+  // SpreadsheetML 2003; Excel ga odpre neposredno.
+  let rows = `
+    <Row>
+      <Cell><Data ss:Type="String">EAN</Data></Cell>
+      <Cell><Data ss:Type="Number">Količina</Data></Cell>
+    </Row>`;
+
+  for(const x of items){
+    rows += `
+    <Row>
+      <Cell ss:StyleID="EAN"><Data ss:Type="String">${escXml(x.ean)}</Data></Cell>
+      <Cell><Data ss:Type="Number">${x.qty}</Data></Cell>
+    </Row>`;
+  }
+
+  const xml = `<?xml version="1.0"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:o="urn:schemas-microsoft-com:office:office"
+ xmlns:x="urn:schemas-microsoft-com:office:excel"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+ <Styles>
+  <Style ss:ID="Default" ss:Name="Normal">
+   <Alignment ss:Vertical="Bottom"/>
+  </Style>
+  <Style ss:ID="EAN">
+   <NumberFormat ss:Format="@"/>
+  </Style>
+ </Styles>
+ <Worksheet ss:Name="Naročilo">
+  <Table>
+   <Column ss:Width="130"/>
+   <Column ss:Width="80"/>
+   ${rows}
+  </Table>
+  <WorksheetOptions xmlns="urn:schemas-microsoft-com:office:excel">
+   <FreezePanes/>
+   <FrozenNoSplit/>
+   <SplitHorizontal>1</SplitHorizontal>
+   <TopRowBottomPane>1</TopRowBottomPane>
+  </WorksheetOptions>
+ </Worksheet>
+</Workbook>`;
+
+  const blob=new Blob([xml],{type:'application/vnd.ms-excel'});
+  const a=document.createElement('a');
+  const d=new Date();
+  const name=`narocilo_EAN_${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}.xls`;
+  a.href=URL.createObjectURL(blob);
+  a.download=name;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},500);
+  toast('Excel datoteka je pripravljena.');
+}
+
+async function openScanner(){
+  document.getElementById('scannerModal').style.display='flex';
+  const status=document.getElementById('status');
+
+  if(!navigator.mediaDevices?.getUserMedia){
+    status.textContent='Ta brskalnik ne podpira kamere. Uporabi ročni vnos.';
+    return;
+  }
+
+  try{
+    stream=await navigator.mediaDevices.getUserMedia({
+      video:{facingMode:{ideal:'environment'}},audio:false
+    });
+    document.getElementById('video').srcObject=stream;
+
+    if('BarcodeDetector' in window){
+      let formats=['ean_13','ean_8','upc_a','upc_e','code_128'];
+      const detector=new BarcodeDetector({formats});
+      status.textContent='Usmeri kamero v EAN kodo.';
+      timer=setInterval(async()=>{
+        try{
+          const codes=await detector.detect(document.getElementById('video'));
+          if(codes.length){
+            const ean=(codes[0].rawValue||'').replace(/\D/g,'');
+            if(ean){
+              document.getElementById('ean').value=ean;
+              closeScanner();
+              document.getElementById('qty').focus();
+              document.getElementById('qty').select();
+              toast('EAN skeniran. Vnesi količino.');
+            }
+          }
+        }catch(e){}
+      },400);
+    }else{
+      status.innerHTML='Kamera deluje, vendar ta brskalnik nima BarcodeDetector podpore.<br>Uporabi ročni vnos ali Chrome/Edge na podprti napravi.';
+    }
+  }catch(e){
+    status.textContent='Kamera ni dovoljena ali ni na voljo. Uporabi ročni vnos.';
+  }
+}
+
+function closeScanner(){
+  clearInterval(timer);timer=null;
+  if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}
+  document.getElementById('scannerModal').style.display='none';
+}
+
+document.getElementById('ean').addEventListener('keydown',e=>{
+  if(e.key==='Enter'){
+    document.getElementById('qty').focus();
+    document.getElementById('qty').select();
+  }
+});
+document.getElementById('qty').addEventListener('keydown',e=>{
+  if(e.key==='Enter') addItem();
+});
+render();
+</script>
+</body>
+</html>
