@@ -89,22 +89,21 @@ video{display:block;width:100%;min-height:240px;max-height:62vh;object-fit:cover
       </div>
       <div>
         <label>KOLIČINA *</label>
-        <input id="qty" type="number" min="1" step="1" value="1">
+        <input id="qty" type="number" min="1" step="1" value="1" inputmode="numeric" enterkeyhint="done" autocomplete="off">
       </div>
     </div>
 
     <div style="margin-top:9px">
       <label>DOBAVITELJ (neobvezno)</label>
-      <input id="supplier" autocomplete="off" placeholder="npr. Knauf, JUB, Murexin">
+      <input id="supplier" autocomplete="off" placeholder="npr. Knauf, JUB, Murexin" tabindex="-1">
       <div class="small" id="supplierHint" style="margin-top:4px">
         Če je EAN že znan, se dobavitelj izpolni samodejno.
       </div>
     </div>
 
-    <label style="display:flex;gap:8px;align-items:center;margin-top:10px;font-size:13px">
-      <input id="fastMode" type="checkbox" checked style="width:auto">
-      Hitri način: po dodani količini takoj odpri kamero za naslednji artikel
-    </label>
+    <div class="small" style="margin-top:10px">
+      Po potrditvi količine se artikel samodejno doda in skener se ponovno odpre.
+    </div>
 
     <button class="add" onclick="addItem(true)">DODAJ NA SEZNAM</button>
   </section>
@@ -314,6 +313,12 @@ document.getElementById('ean').value='';
   toast(existing ? 'Količina povečana.' : 'Artikel dodan.');
 
   if(reopenScanner){
+    try{
+      if(document.activeElement && document.activeElement.blur){
+        document.activeElement.blur();
+      }
+    }catch(e){}
+
     setTimeout(()=>openScanner(),300);
   }else{
     document.getElementById('ean').focus();
@@ -949,28 +954,64 @@ document.getElementById('photoInput').addEventListener('change',async e=>{
 });
 
 document.getElementById('ean').addEventListener('keydown',e=>{
-  if(e.key==='Enter'){
+  if(e.key==='Enter' || e.keyCode===13){
+    e.preventDefault();
+
     const code=document.getElementById('ean').value.trim();
+
     if(supplierMap[code]){
       document.getElementById('supplier').value=supplierMap[code];
     }
-    const q=document.getElementById('qty');
-    q.focus();
-    q.select();
+
+    lastInputWasScan=false;
+    focusQuantity();
   }
 });
-document.getElementById('supplier').addEventListener('keydown',e=>{
-  if(e.key==='Enter'){
-    const q=document.getElementById('qty');
-    q.focus();
-    q.select();
+function confirmQuantityAndContinue(){
+  if(quantityCommitBusy) return;
+
+  const eanValue=document.getElementById('ean').value.trim();
+  const qtyValue=parseInt(document.getElementById('qty').value,10);
+
+  if(!validEAN(eanValue)) return;
+  if(!Number.isInteger(qtyValue) || qtyValue < 1) return;
+
+  quantityCommitBusy=true;
+
+  try{
+    addItem(true);
+  }finally{
+    setTimeout(()=>{
+      quantityCommitBusy=false;
+    },700);
+  }
+}
+
+document.getElementById('qty').addEventListener('keydown',e=>{
+  if(
+    e.key==='Enter' ||
+    e.key==='Go' ||
+    e.key==='Done' ||
+    e.code==='Enter' ||
+    e.keyCode===13
+  ){
+    e.preventDefault();
+    e.stopPropagation();
+    confirmQuantityAndContinue();
   }
 });
 
-document.getElementById('qty').addEventListener('keydown',e=>{
-  if(e.key==='Enter'){
-    e.preventDefault();
-    addItem(true);
+// Android tipkovnice včasih ne pošljejo keydown Enter.
+// Takrat se ob pritisku Done sproži change/blur.
+document.getElementById('qty').addEventListener('change',()=>{
+  if(lastInputWasScan){
+    confirmQuantityAndContinue();
+  }
+});
+
+document.getElementById('qty').addEventListener('blur',()=>{
+  if(lastInputWasScan){
+    setTimeout(confirmQuantityAndContinue,0);
   }
 });
 
