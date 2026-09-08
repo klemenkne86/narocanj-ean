@@ -112,7 +112,7 @@ video{display:block;width:100%;min-height:240px;max-height:62vh;object-fit:cover
   <section class="card">
     <h2>Pošiljanje naročila</h2>
     <label>E-POŠTA PREJEMNIKA</label>
-    <input id="emailRecipient" type="email" autocomplete="email" placeholder="narocila@podjetje.si">
+    <input id="emailRecipient" type="email" autocomplete="email" placeholder="klemen.kne@domtrade.si, Info.zabnica@domtrade.si">
     <div class="small" style="margin-top:5px">
       Naslov se shrani v telefonu. Pri pošiljanju izberi Gmail, Outlook ali drugo e-poštno aplikacijo.
     </div>
@@ -190,7 +190,7 @@ video{display:block;width:100%;min-height:240px;max-height:62vh;object-fit:cover
 let items = JSON.parse(localStorage.getItem('faw_ean_qty_v3') || '[]');
 let supplierMap = JSON.parse(localStorage.getItem('faw_supplier_map') || '{}');
 let history = JSON.parse(localStorage.getItem('faw_order_history') || '[]');
-let savedEmail = localStorage.getItem('faw_order_email') || '';
+let savedEmail = localStorage.getItem('faw_order_email') || 'klemen.kne@domtrade.si, Info.zabnica@domtrade.si';
 let reader = null;
 let controls = null;
 let torchOn = false;
@@ -253,19 +253,20 @@ function setScannedCode(code){
   if(supplierMap[code]){
     supplier.value=supplierMap[code];
     hint.textContent='✓ Dobavitelj je bil izpolnjen iz shranjene povezave.';
-    setTimeout(()=>{
-      const q=document.getElementById('qty');
-      q.focus();
-      q.select();
-    },150);
   }else{
     supplier.value='';
-    hint.textContent='Ta EAN še nima dobavitelja. Vnesi ga prvič.';
-    setTimeout(()=>supplier.focus(),150);
+    hint.textContent='Dobavitelj ni obvezen. Lahko ga pustiš praznega.';
   }
 
   feedback();
-  toast('EAN skeniran.');
+
+  setTimeout(()=>{
+    const q=document.getElementById('qty');
+    q.focus();
+    q.select();
+  },150);
+
+  toast('EAN skeniran. Vnesi količino in potrdi.');
   return true;
 }
 
@@ -682,17 +683,10 @@ async function openScanner(){
       select.appendChild(opt);
     });
 
-    // Poskusi izbrati navadno zadnjo kamero, ne ultra-wide/macro.
-    const opts=[...select.options];
-    let best=opts.find(o=>
-      /back|rear|environment|zadnja|zadaj/i.test(o.textContent) &&
-      !/ultra|wide|macro/i.test(o.textContent)
-    );
-    if(!best){
-      best=opts.find(o=>/back|rear|environment|zadnja|zadaj/i.test(o.textContent));
-    }
-    if(best){
-      select.value=best.value;
+    // Privzeto vedno izberi kamero 0 (prvo kamero na seznamu).
+    // Če uporabnik želi, jo lahko pozneje ročno spremeni.
+    if(select.options.length){
+      select.selectedIndex=0;
     }
 
     status.textContent='Če je slika meglena, v seznamu Kamera izberi drugo zadnjo lečo.';
@@ -942,7 +936,10 @@ document.getElementById('supplier').addEventListener('keydown',e=>{
 });
 
 document.getElementById('qty').addEventListener('keydown',e=>{
-  if(e.key==='Enter') addItem();
+  if(e.key==='Enter'){
+    e.preventDefault();
+    addItem();
+  }
 });
 
 
