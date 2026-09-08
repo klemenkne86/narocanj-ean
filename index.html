@@ -3,6 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#2f4f6c">
+<link rel="manifest" href="manifest.webmanifest">
 <title>FAW naročanje – EAN + količina</title>
 
 <script src="https://unpkg.com/@zxing/browser@0.1.5"></script>
@@ -50,6 +52,17 @@ input{width:100%;padding:13px;border:1px solid #aeb9c3;border-radius:8px;font-si
 .searchResults{margin-top:8px;max-height:310px;overflow:auto;border-radius:8px}
 .searchResult{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;padding:9px;border-bottom:1px solid #edf1f4;background:#fff}
 .searchResult button{border:0;border-radius:7px;padding:8px 10px;background:var(--blue);color:#fff;font-weight:700}
+.walkStatus{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center}
+.walkActions{display:flex;gap:7px;flex-wrap:wrap}
+.walkActions button{border:0;border-radius:8px;padding:10px 12px;font-weight:800}
+.undoBtn{background:#fff3cd;color:#735c0f}.reviewBtn{background:var(--blue);color:#fff}
+.saveState{font-size:12px;color:var(--green);font-weight:700;margin-top:5px}
+#reviewModal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:120;padding:14px;align-items:center;justify-content:center}
+.reviewBox{width:min(680px,100%);max-height:88vh;overflow:auto;background:#fff;border-radius:14px;padding:14px}
+.reviewRow{padding:9px 0;border-bottom:1px solid #edf1f4}
+.reviewFooter{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+.reviewFooter button{border:0;border-radius:9px;padding:13px 8px;font-weight:800}
+.reviewClose{background:#edf1f4;color:#263746}.reviewExport{background:var(--green);color:#fff}.reviewSend{background:var(--blue);color:#fff;grid-column:1/-1}
 button:disabled,input:disabled{opacity:.5;cursor:not-allowed}
 .summary{margin-top:10px;border-top:1px solid var(--line);padding-top:10px;display:flex;justify-content:space-between;font-weight:700;font-size:13px}
 .footer{position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid var(--line);padding:10px 14px calc(10px + env(safe-area-inset-bottom));display:grid;grid-template-columns:1fr 1.4fr;gap:8px;z-index:30}
@@ -224,6 +237,20 @@ function doPost(e) {
   </section>
 
   <section class="card">
+    <div class="walkStatus">
+      <div>
+        <h2>Zadnji dodani artikel</h2>
+        <div id="lastAdded">Ni še dodanega artikla.</div>
+        <div id="saveState" class="saveState">✓ Naročilo se samodejno shranjuje</div>
+      </div>
+      <div class="walkActions">
+        <button id="undoLastBtn" class="undoBtn" type="button" onclick="undoLastAdd()" disabled>↶ RAZVELJAVI</button>
+        <button class="reviewBtn" type="button" onclick="openOrderReview()">PREGLEJ</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
       <h2 style="margin:0">Zgodovina naročil</h2>
       <button class="toolbtn" onclick="clearHistory()">Počisti zgodovino</button>
@@ -234,7 +261,21 @@ function doPost(e) {
 
 <div class="footer">
   <button class="clear" onclick="clearOrder()">POČISTI</button>
-  <button id="sendOrderBtn" class="export" onclick="saveAndShareOrder()">SHRANI + POŠLJI NA MAIL</button>
+  <button id="sendOrderBtn" class="export" onclick="openOrderReview()">PREGLEJ + DOKONČAJ</button>
+</div>
+
+<div id="reviewModal">
+  <div class="reviewBox">
+    <h2>Končni pregled naročila</h2>
+    <div id="reviewSummary" class="small" style="margin-bottom:8px"></div>
+    <div id="reviewItems"></div>
+    <div id="reviewWarnings" class="lockedNote" style="display:none"></div>
+    <div class="reviewFooter">
+      <button class="reviewClose" type="button" onclick="closeOrderReview()">NAZAJ</button>
+      <button class="reviewExport" type="button" onclick="exportReviewedOrder()">IZVOZI EXCEL</button>
+      <button class="reviewSend" type="button" onclick="sendReviewedOrder()">POŠLJI NA MAIL</button>
+    </div>
+  </div>
 </div>
 
 <div id="scannerModal">
@@ -287,6 +328,7 @@ let items = JSON.parse(localStorage.getItem('faw_ean_qty_v3') || '[]');
 let supplierMap = JSON.parse(localStorage.getItem('faw_supplier_map') || '{}');
 let history = JSON.parse(localStorage.getItem('faw_order_history') || '[]');
 let catalogs = JSON.parse(localStorage.getItem('faw_supplier_catalogs_v1') || '{}');
+let lastAction = JSON.parse(localStorage.getItem('faw_last_add_action') || 'null');
 let savedRecipient = localStorage.getItem('faw_order_recipient') || 'klemen.kne@domtrade.si';
 let reader = null;
 let controls = null;
@@ -306,6 +348,11 @@ function save(){
   localStorage.setItem('faw_supplier_map', JSON.stringify(supplierMap));
   localStorage.setItem('faw_order_history', JSON.stringify(history));
   localStorage.setItem('faw_order_recipient', savedRecipient || 'klemen.kne@domtrade.si');
+  if(lastAction){
+    localStorage.setItem('faw_last_add_action',JSON.stringify(lastAction));
+  }else{
+    localStorage.removeItem('faw_last_add_action');
+  }
 }
 
 function toast(msg){
@@ -373,7 +420,9 @@ function updateOrderUI(){
     supplierInput.value=activeSupplier;
     lineSupplier.value=activeSupplier;
     status.className='readyNote';
-    status.textContent='✓ Naročilo za dobavitelja: '+activeSupplier;
+    status.textContent=items.length
+      ? `✓ Nadaljuješ shranjeno naročilo za ${activeSupplier} (${items.length} artiklov).`
+      : '✓ Naročilo za dobavitelja: '+activeSupplier;
     const count=Object.keys(catalogForActiveSupplier()).length;
     document.getElementById('catalogStatus').textContent=count
       ? `Naložen šifrant: ${count} artiklov za ${activeSupplier}.`
@@ -598,11 +647,18 @@ function addItem(reopenScanner=false){
     return;
   }
 
+  if(q>=100 && !confirm(`Vnesel si količino ${q}. Ali je to pravilno?`)){
+    document.getElementById('qty').focus();
+    document.getElementById('qty').select();
+    return;
+  }
+
   const supplierName=activeSupplier;
   const product=productByEAN(e);
   supplierMap[e]=supplierName;
 
   const existing=items.find(x=>x.ean===e && x.supplier===supplierName);
+  const previousQty=existing ? existing.qty : 0;
   if(existing){
     existing.qty+=q;
     if(product) Object.assign(existing,{code:product.code,name:product.name,price:product.price,unit:product.unit});
@@ -617,6 +673,16 @@ function addItem(reopenScanner=false){
       unit:product?.unit||''
     });
   }
+
+  lastAction={
+    ean:e,
+    supplier:supplierName,
+    addedQty:q,
+    previousQty,
+    name:product?.name||'',
+    code:product?.code||'',
+    time:Date.now()
+  };
 
   const shouldReopen=fastMode && reopenScanner && lastInputWasScan;
 
@@ -670,6 +736,53 @@ function render(){
   document.getElementById('qtyCount').textContent=items.reduce((s,x)=>s+x.qty,0);
 
   renderHistory();
+  renderWalkStatus();
+}
+
+function renderWalkStatus(){
+  const box=document.getElementById('lastAdded');
+  const undo=document.getElementById('undoLastBtn');
+  if(!lastAction){
+    box.innerHTML='<span class="small">Ni še dodanega artikla.</span>';
+    undo.disabled=true;
+    return;
+  }
+  const item=items.find(entry=>entry.ean===lastAction.ean && entry.supplier===lastAction.supplier);
+  if(!item){
+    lastAction=null;
+    save();
+    box.innerHTML='<span class="small">Ni še dodanega artikla.</span>';
+    undo.disabled=true;
+    return;
+  }
+  box.innerHTML=`<strong>${escapeHtml(item.name||item.code||item.ean)}</strong><div class="small">EAN: ${escapeHtml(item.ean)} • dodano: ${lastAction.addedQty} • skupaj: ${item.qty}</div>`;
+  undo.disabled=false;
+}
+
+function updateConnectionState(){
+  const state=document.getElementById('saveState');
+  if(!state) return;
+  state.textContent=navigator.onLine
+    ? '✓ Naročilo se samodejno shranjuje'
+    : '✓ Brez interneta – naročilo se varno shranjuje v telefonu';
+}
+
+function undoLastAdd(){
+  if(!lastAction) return;
+  const index=items.findIndex(entry=>entry.ean===lastAction.ean && entry.supplier===lastAction.supplier);
+  if(index<0){
+    lastAction=null;
+    save();render();
+    return;
+  }
+  if(lastAction.previousQty>0){
+    items[index].qty=lastAction.previousQty;
+  }else{
+    items.splice(index,1);
+  }
+  lastAction=null;
+  save();render();
+  toast('Zadnje dodajanje je razveljavljeno.');
 }
 
 function renderHistory(){
@@ -704,17 +817,20 @@ function renderHistory(){
 
 function changeQty(i,d){
   items[i].qty=Math.max(1,items[i].qty+d);
+  lastAction=null;
   save();render();
 }
 
 function removeItem(i){
   items.splice(i,1);
+  lastAction=null;
   save();render();
 }
 
 function clearOrder(){
   if(items.length && !confirm('Izbrišem celotno naročilo?')) return;
   items=[];
+  lastAction=null;
   activeSupplier='';
   orderStarted=false;
   document.getElementById('orderSupplier').value='';
@@ -862,6 +978,49 @@ function fileToBase64(file){
   });
 }
 
+function openOrderReview(){
+  if(!requireStartedOrder()) return;
+  if(!items.length){
+    toast('Seznam je prazen.');
+    return;
+  }
+  const totalQty=items.reduce((sum,item)=>sum+item.qty,0);
+  const knownValue=items.reduce((sum,item)=>sum+(Number.isFinite(item.price)?item.price*item.qty:0),0);
+  const pricedCount=items.filter(item=>Number.isFinite(item.price)).length;
+  document.getElementById('reviewSummary').textContent=
+    `${activeSupplier} • ${items.length} različnih artiklov • ${totalQty} kos`+
+    (pricedCount ? ` • znana vrednost: ${knownValue.toFixed(2)} €` : '');
+
+  document.getElementById('reviewItems').innerHTML=items.map((item,index)=>{
+    const value=Number.isFinite(item.price) ? ` • ${(item.price*item.qty).toFixed(2)} €` : '';
+    return `<div class="reviewRow"><strong>${index+1}. ${escapeHtml(item.name||item.code||item.ean)}</strong><div class="small">EAN: ${escapeHtml(item.ean)}${item.code ? ` • Šifra: ${escapeHtml(item.code)}` : ''} • Količina: ${item.qty}${value}</div></div>`;
+  }).join('');
+
+  const warnings=[];
+  const unknown=items.filter(item=>!item.name && !item.code).length;
+  const high=items.filter(item=>item.qty>=100).length;
+  if(unknown) warnings.push(`${unknown} artiklov ni povezanih s šifrantom.`);
+  if(high) warnings.push(`${high} artiklov ima količino 100 ali več.`);
+  const warningBox=document.getElementById('reviewWarnings');
+  warningBox.style.display=warnings.length ? 'block' : 'none';
+  warningBox.textContent=warnings.join(' ');
+  document.getElementById('reviewModal').style.display='flex';
+}
+
+function closeOrderReview(){
+  document.getElementById('reviewModal').style.display='none';
+}
+
+function exportReviewedOrder(){
+  closeOrderReview();
+  exportXlsx();
+}
+
+function sendReviewedOrder(){
+  closeOrderReview();
+  saveAndShareOrder();
+}
+
 function saveMailSettings(){
   const url=document.getElementById('mailApiUrl').value.trim();
   const token=document.getElementById('mailApiToken').value.trim();
@@ -946,7 +1105,7 @@ async function saveAndShareOrder(){
       sendBusy=false;
       const sendButton=document.getElementById('sendOrderBtn');
       sendButton.disabled=false;
-      sendButton.textContent='SHRANI + POŠLJI NA MAIL';
+      sendButton.textContent='PREGLEJ + DOKONČAJ';
     }
   }
 
@@ -1489,6 +1648,13 @@ if(mailApiTokenInput){
 updateSupplierList();
 updateOrderUI();
 render();
+updateConnectionState();
+window.addEventListener('online',updateConnectionState);
+window.addEventListener('offline',updateConnectionState);
+
+if('serviceWorker' in navigator && window.isSecureContext){
+  navigator.serviceWorker.register('./sw.js').catch(()=>{});
+}
 
 
 </script>
