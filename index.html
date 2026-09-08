@@ -707,60 +707,10 @@ async function openScanner(){
       throw new Error('ZXing knjižnica se ni naložila.');
     }
 
-    // Dovoljenje najprej: šele nato Android pokaže prava imena/leče.
-    let temp;
-    try{
-      temp=await navigator.mediaDevices.getUserMedia({
-        video:{facingMode:{ideal:'environment'}},
-        audio:false
-      });
-    }catch(permissionError){
-      // Nekateri Androidi ne vrnejo seznama kamer, dokler uporabnik ne potrdi
-      // dovoljenja. Vseeno ponudi neposreden zagon zadnje kamere.
-      setAutomaticCameraOption();
-      status.textContent='Seznama kamer telefon ni vrnil. Poskušam odpreti zadnjo kamero …';
-      await startSelectedCamera();
-      return;
-    }
-    temp.getTracks().forEach(t=>t.stop());
-
-    const devices=await navigator.mediaDevices.enumerateDevices();
-    const cams=devices.filter(d=>d.kind==='videoinput');
-
-    if(!cams.length){
-      setAutomaticCameraOption();
-      status.textContent='Seznama kamer telefon ni vrnil. Poskušam odpreti zadnjo kamero …';
-      await startSelectedCamera();
-      return;
-    }
-
-    select.innerHTML='';
-
-    cams.forEach((cam,i)=>{
-      const opt=document.createElement('option');
-      opt.value=cam.deviceId;
-      opt.textContent=cam.label || `Kamera ${i+1}`;
-      select.appendChild(opt);
-    });
-
-    // Privzeto izberi dejansko kamero z oznako "Camera 0" / "Kamera 0".
-    // Če take oznake telefon ne vrne, uporabi prvo kamero kot rezervo.
-    if(select.options.length){
-      const opts=[...select.options];
-
-      const cameraZero =
-        opts.find(o => /(?:camera|kamera)\s*0\b/i.test(o.textContent || '')) ||
-        opts.find(o => /\b0\b.*(?:back|rear|environment|zadnja|zadaj)/i.test(o.textContent || '')) ||
-        opts.find(o => /(?:back|rear|environment|zadnja|zadaj).*\b0\b/i.test(o.textContent || ''));
-
-      if(cameraZero){
-        select.value=cameraZero.value;
-      }else{
-        select.selectedIndex=0;
-      }
-    }
-
-    status.textContent='Privzeto je izbrana Kamera 0. Če je slika meglena, lahko ročno izbereš drugo.';
+    // Ne čakamo na enumerateDevices: na nekaterih Androidih ta klic obstane.
+    // facingMode: environment neposredno zahteva zadnjo kamero in sproži dovoljenje.
+    setAutomaticCameraOption();
+    status.textContent='Odpiram zadnjo kamero …';
     await startSelectedCamera();
 
   }catch(e){
