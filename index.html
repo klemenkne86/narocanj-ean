@@ -117,18 +117,37 @@ video{display:block;width:100%;min-height:240px;max-height:62vh;object-fit:cover
       <button onclick="closeScanner()">Zapri</button>
     </div>
     <div class="scannerBody">
+      <div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end;margin-bottom:8px">
+        <div>
+          <label style="font-size:12px;font-weight:700">Kamera</label>
+          <select id="cameraSelect" style="width:100%;padding:10px;border:1px solid #adb9c3;border-radius:8px"></select>
+        </div>
+        <button onclick="startSelectedCamera()" style="padding:10px;border:1px solid #adb9c3;border-radius:8px;background:#f2f5f7;font-weight:700">Zaženi</button>
+      </div>
+
       <div class="videoWrap">
         <video id="preview" autoplay muted playsinline></video>
         <div class="scanFrame"></div>
         <div class="scanLine"></div>
       </div>
 
-      <div id="cameraStatus">Odpiram zadnjo kamero …</div>
+      <div id="zoomBox" style="display:none;margin-top:8px">
+        <label style="font-size:12px;font-weight:700">Zoom: <span id="zoomValue">1.0×</span></label>
+        <input id="zoomSlider" type="range" min="1" max="1" step="0.1" value="1" style="width:100%">
+      </div>
+
+      <div id="focusBox" style="display:none;margin-top:8px">
+        <label style="font-size:12px;font-weight:700">Ročni fokus: <span id="focusValue"></span></label>
+        <input id="focusSlider" type="range" min="0" max="1" step="0.01" value="0" style="width:100%">
+      </div>
+
+      <div id="cameraStatus">Pripravljam kamere …</div>
       <div id="cameraError"></div>
 
       <div class="cameraTools">
+        <button onclick="refocus()">🎯 Ponovno izostri</button>
+        <button onclick="restartScanner()">↻ Restart</button>
         <button id="torchBtn" onclick="toggleTorch()">🔦 Lučka</button>
-        <button onclick="restartScanner()">↻ Poskusi znova</button>
       </div>
     </div>
   </div>
@@ -142,6 +161,8 @@ let reader = null;
 let controls = null;
 let torchOn = false;
 let scanLocked = false;
+let currentTrack = null;
+let currentDeviceId = null;
 
 function save(){
   localStorage.setItem('faw_ean_qty_v3', JSON.stringify(items));
@@ -262,29 +283,109 @@ async function openScanner(){
   const modal=document.getElementById('scannerModal');
   const status=document.getElementById('cameraStatus');
   const error=document.getElementById('cameraError');
-  const torchBtn=document.getElementById('torchBtn');
 
   modal.style.display='flex';
   error.style.display='none';
   error.textContent='';
-  torchBtn.style.display='none';
-  status.textContent='Odpiram zadnjo kamero …';
-  scanLocked=false;
+  status.textContent='Pripravljam seznam kamer …';
+  document.getElementById('zoomBox').style.display='none';
+  document.getElementById('focusBox').style.display='none';
 
   try{
     if(!window.isSecureContext){
       throw new Error('Stran ni odprta prek HTTPS.');
     }
+    if(!navigator.mediaDevices?.getUserMedia){
+      throw new Error('Brskalnik ne omogoča dostopa do kamere.');
+    }
     if(typeof ZXingBrowser==='undefined'){
-      throw new Error('ZXing knjižnica se ni naložila. Preveri internetno povezavo.');
+      throw new Error('ZXing knjižnica se ni naložila.');
     }
 
+    // Dovoljenje najprej: šele nato Android pokaže prava imena/leče.
+    const temp=await navigator.mediaDevices.getUserMedia({
+      video:{facingMode:{ideal:'environment'}},
+      audio:false
+    });
+    temp.getTracks().forEach(t=>t.stop());
+
+    const devices=await navigator.mediaDevices.enumerateDevices();
+    const cams=devices.filter(d=>d.kind==='videoinput');
+
+    if(!cams.length){
+      throw new Error('Telefon ni vrnil nobene kamere.');
+    }
+
+    const select=document.getElementById('cameraSelect');
+    select.innerHTML='';
+
+    cams.forEach((cam,i)=>{
+      const opt=document.createElement('option');
+      opt.value=cam.deviceId;
+      opt.textContent=cam.label || `Kamera ${i+1}`;
+      select.appendChild(opt);
+    });
+
+    // Poskusi izbrati navadno zadnjo kamero, ne ultra-wide/macro.
+    const opts=[...select.options];
+    let best=opts.find(o=>
+      /back|rear|environment|zadnja|zadaj/i.test(o.textContent) &&
+      !/ultra|wide|macro/i.test(o.textContent)
+    );
+    if(!best){
+      best=opts.find(o=>/back|rear|environment|zadnja|zadaj/i.test(o.textContent));
+    }
+    if(best){
+      select.value=best.value;
+    }
+
+    status.textContent='Če je slika meglena, v seznamu Kamera izberi drugo zadnjo lečo.';
+    await startSelectedCamera();
+
+  }catch(e){
+    error.style.display='block';
+    error.innerHTML='<strong>Kamera se ni odprla.</strong><br>'+String(e?.message||e);
+    status.textContent='Fotografiranje kode lahko še vedno uporabiš.';
+  }
+}
+
+async function stopCamera(){
+  try{
+    if(controls && typeof controls.stop==='function'){
+      await controls.stop();
+    }
+  }catch(e){}
+
+  controls=null;
+  currentTrack=null;
+
+  const video=document.getElementById('preview');
+  if(video.srcObject){
+    try{
+      video.srcObject.getTracks().forEach(t=>t.stop());
+    }catch(e){}
+    video.srcObject=null;
+  }
+}
+
+async function startSelectedCamera(){
+  await stopCamera();
+
+  const error=document.getElementById('cameraError');
+  const status=document.getElementById('cameraStatus');
+  const deviceId=document.getElementById('cameraSelect').value;
+
+  error.style.display='none';
+  scanLocked=false;
+  currentDeviceId=deviceId;
+
+  try{
     reader=new ZXingBrowser.BrowserMultiFormatReader();
 
     controls=await reader.decodeFromVideoDevice(
-      undefined,
+      deviceId || undefined,
       document.getElementById('preview'),
-      (result,err,ctrl)=>{
+      (result)=>{
         if(result && !scanLocked){
           const code=normalizeCode(result.getText ? result.getText() : result.text);
           if(validEAN(code)){
@@ -296,45 +397,125 @@ async function openScanner(){
       }
     );
 
-    status.textContent='Kamera deluje. Postavi EAN v beli okvir.';
+    status.textContent='Kamera deluje. EAN postavi v beli okvir.';
+    setTimeout(setupFocusControls,700);
 
     if(controls && typeof controls.switchTorch==='function'){
-      torchBtn.style.display='block';
+      document.getElementById('torchBtn').style.display='block';
     }
 
   }catch(e){
     error.style.display='block';
-    error.innerHTML='<strong>Kamera se ni odprla.</strong><br>' +
-      String(e && e.message ? e.message : e) +
-      '<br><br>Odpri stran neposredno v Chrome prek HTTPS in preveri dovoljenje Kamera.';
-    status.textContent='Uporabi lahko tudi gumb »Fotografiraj kodo«.';
+    error.innerHTML='<strong>Te kamere ni bilo mogoče zagnati.</strong><br>'+String(e?.message||e);
+  }
+}
+
+async function setupFocusControls(){
+  const video=document.getElementById('preview');
+  currentTrack=video?.srcObject?.getVideoTracks?.()[0] || null;
+  if(!currentTrack) return;
+
+  const caps=currentTrack.getCapabilities ? currentTrack.getCapabilities() : {};
+
+  // Poskusi neprekinjeni autofocus.
+  if(caps.focusMode && caps.focusMode.includes('continuous')){
+    try{
+      await currentTrack.applyConstraints({
+        advanced:[{focusMode:'continuous'}]
+      });
+    }catch(e){}
+  }
+
+  const zoomBox=document.getElementById('zoomBox');
+  const zoomSlider=document.getElementById('zoomSlider');
+
+  if(caps.zoom){
+    zoomBox.style.display='block';
+    zoomSlider.min=caps.zoom.min;
+    zoomSlider.max=caps.zoom.max;
+    zoomSlider.step=caps.zoom.step || 0.1;
+
+    const start=Math.max(caps.zoom.min,Math.min(1,caps.zoom.max));
+    zoomSlider.value=start;
+    document.getElementById('zoomValue').textContent=Number(start).toFixed(1)+'×';
+
+    zoomSlider.oninput=async()=>{
+      const z=Number(zoomSlider.value);
+      document.getElementById('zoomValue').textContent=z.toFixed(1)+'×';
+      try{
+        await currentTrack.applyConstraints({advanced:[{zoom:z}]});
+      }catch(e){}
+    };
+  }else{
+    zoomBox.style.display='none';
+  }
+
+  const focusBox=document.getElementById('focusBox');
+  const focusSlider=document.getElementById('focusSlider');
+
+  if(caps.focusDistance){
+    focusBox.style.display='block';
+    focusSlider.min=caps.focusDistance.min;
+    focusSlider.max=caps.focusDistance.max;
+    focusSlider.step=caps.focusDistance.step || 0.01;
+
+    const middle=(caps.focusDistance.min+caps.focusDistance.max)/2;
+    focusSlider.value=middle;
+    document.getElementById('focusValue').textContent=middle.toFixed(2);
+
+    focusSlider.oninput=async()=>{
+      const f=Number(focusSlider.value);
+      document.getElementById('focusValue').textContent=f.toFixed(2);
+      try{
+        await currentTrack.applyConstraints({
+          advanced:[
+            {focusMode:'manual'},
+            {focusDistance:f}
+          ]
+        });
+      }catch(e){}
+    };
+  }else{
+    focusBox.style.display='none';
+  }
+}
+
+async function refocus(){
+  if(!currentTrack){
+    toast('Kamera še ni pripravljena.');
+    return;
+  }
+
+  const caps=currentTrack.getCapabilities ? currentTrack.getCapabilities() : {};
+
+  try{
+    if(caps.focusMode && caps.focusMode.includes('continuous')){
+      await currentTrack.applyConstraints({
+        advanced:[{focusMode:'continuous'}]
+      });
+      toast('Autofocus ponovno vključen.');
+    }else{
+      await restartScanner();
+      toast('Kamera ponovno zagnana.');
+    }
+  }catch(e){
+    await restartScanner();
   }
 }
 
 async function closeScanner(){
-  try{
-    if(controls && typeof controls.stop==='function'){
-      await controls.stop();
-    }
-  }catch(e){}
-
-  controls=null;
-  reader=null;
-  torchOn=false;
-
-  const video=document.getElementById('preview');
-  if(video.srcObject){
-    try{video.srcObject.getTracks().forEach(t=>t.stop());}catch(e){}
-    video.srcObject=null;
-  }
-
+  await stopCamera();
   document.getElementById('scannerModal').style.display='none';
 }
 
 async function restartScanner(){
-  await closeScanner();
-  setTimeout(openScanner,250);
+  if(currentDeviceId){
+    document.getElementById('cameraSelect').value=currentDeviceId;
+  }
+  await startSelectedCamera();
 }
+
+document.getElementById('cameraSelect').addEventListener('change',startSelectedCamera);
 
 async function toggleTorch(){
   if(!controls || typeof controls.switchTorch!=='function') return;
