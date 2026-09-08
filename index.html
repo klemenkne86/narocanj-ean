@@ -229,6 +229,16 @@ function toast(msg){
   window.toastTimer=setTimeout(()=>t.style.display='none',1800);
 }
 
+function withTimeout(promise,ms,message){
+  let timer;
+  return Promise.race([
+    promise.finally(()=>clearTimeout(timer)),
+    new Promise((_,reject)=>{
+      timer=setTimeout(()=>reject(new Error(message)),ms);
+    })
+  ]);
+}
+
 function validEAN(code){
   return /^[0-9]{8,14}$/.test(code);
 }
@@ -683,7 +693,7 @@ async function openScanner(){
   modal.style.display='flex';
   error.style.display='none';
   error.textContent='';
-  status.textContent='Pripravljam seznam kamer …';
+  status.textContent='Pripravljam kamero …';
   document.getElementById('zoomBox').style.display='none';
   document.getElementById('focusBox').style.display='none';
 
@@ -714,11 +724,10 @@ async function openScanner(){
     await startSelectedCamera();
 
   }catch(e){
-    // Tudi če enumerateDevices odpove, lahko veliko telefonov še vedno odpre
-    // zadnjo kamero neposredno prek facingMode: environment.
     setAutomaticCameraOption();
-    status.textContent='Poskušam neposredno odpreti zadnjo kamero …';
-    await startSelectedCamera();
+    status.textContent='Kamera se ni odprla.';
+    error.style.display='block';
+    error.innerHTML='<strong>Kamere ni mogoče zagnati.</strong><br>'+escapeHtml(String(e?.message||e));
   }
 }
 
@@ -756,14 +765,29 @@ async function startSelectedCamera(){
     const video=document.getElementById('preview');
     reader=new ZXingBrowser.BrowserMultiFormatReader(undefined,250);
 
-    // decodeFromConstraints je na Androidu zanesljivejši od decodeFromVideoDevice:
-    // brskalnik sam odpre izbrano lečo z ustreznimi video omejitvami.
     const videoConstraints=deviceId
-      ? {deviceId:{exact:deviceId},width:{ideal:1920},height:{ideal:1080}}
-      : {facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}};
+      ? {deviceId:{exact:deviceId},width:{ideal:1280},height:{ideal:720}}
+      : {facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}};
 
-    controls=await reader.decodeFromConstraints(
-      {video:videoConstraints,audio:false},
+    status.textContent='Dovoljujem dostop do kamere …';
+    const stream=await withTimeout(
+      navigator.mediaDevices.getUserMedia({video:videoConstraints,audio:false}),
+      10000,
+      'Telefon se ni odzval. Preveri dovoljenje za kamero v Chromu.'
+    );
+
+    video.srcObject=stream;
+    await withTimeout(
+      video.play(),
+      5000,
+      'Video kamere se ni zagnal.'
+    );
+
+    currentTrack=stream.getVideoTracks()[0] || null;
+    status.textContent='Kamera deluje. Zaganjam branje EAN …';
+
+    controls=await withTimeout(reader.decodeFromStream(
+      stream,
       video,
       (result)=>{
         if(result && !scanLocked){
@@ -778,7 +802,7 @@ async function startSelectedCamera(){
           }
         }
       }
-    );
+    ),5000,'Bralnika EAN ni bilo mogoče zagnati.');
 
     status.textContent='Kamera deluje. EAN postavi v beli okvir.';
     setTimeout(setupFocusControls,700);
@@ -788,6 +812,7 @@ async function startSelectedCamera(){
     }
 
   }catch(e){
+    await stopCamera();
     error.style.display='block';
     const message=String(e?.message||e);
     const help=(e?.name==='NotAllowedError')
