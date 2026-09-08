@@ -702,7 +702,7 @@ async function openScanner(){
     select.innerHTML='';
     const opt=document.createElement('option');
     opt.value='';
-    opt.textContent='Zadnja kamera (samodejno)';
+    opt.textContent='Kamera 0';
     select.appendChild(opt);
   };
 
@@ -717,10 +717,38 @@ async function openScanner(){
       throw new Error('ZXing knjižnica se ni naložila.');
     }
 
-    // Ne čakamo na enumerateDevices: na nekaterih Androidih ta klic obstane.
-    // facingMode: environment neposredno zahteva zadnjo kamero in sproži dovoljenje.
     setAutomaticCameraOption();
-    status.textContent='Odpiram zadnjo kamero …';
+    status.textContent='Izbrana je Kamera 0. Odpiram kamero …';
+
+    // Če so ID-ji kamer že dostopni, izberi dejansko Camera/Kamera 0.
+    // Čakanje je omejeno, zato se skener ne more več ustaviti pri izbiri.
+    try{
+      const devices=await withTimeout(
+        navigator.mediaDevices.enumerateDevices(),
+        1200,
+        'Izbira kamere je trajala predolgo.'
+      );
+      const cams=devices.filter(d=>d.kind==='videoinput');
+      if(cams.length){
+        select.innerHTML='';
+        cams.forEach((cam,i)=>{
+          const opt=document.createElement('option');
+          opt.value=cam.deviceId;
+          opt.textContent=cam.label || `Kamera ${i}`;
+          select.appendChild(opt);
+        });
+
+        const options=[...select.options];
+        const cameraZero=
+          options.find(o=>/(?:camera|kamera)\s*0\b/i.test(o.textContent||'')) ||
+          options.find(o=>/\b0\b.*(?:back|rear|environment|zadnja|zadaj)/i.test(o.textContent||'')) ||
+          options.find(o=>/(?:back|rear|environment|zadnja|zadaj).*\b0\b/i.test(o.textContent||''));
+        select.value=(cameraZero || options[0]).value;
+      }
+    }catch(e){
+      // Kamera 0 z avtomatsko zadnjo lečo ostane izbrana.
+    }
+
     await startSelectedCamera();
 
   }catch(e){
