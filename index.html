@@ -94,7 +94,7 @@ video{display:block;width:100%;min-height:240px;max-height:62vh;object-fit:cover
     </div>
 
     <div style="margin-top:9px">
-      <label>DOBAVITELJ *</label>
+      <label>DOBAVITELJ (neobvezno)</label>
       <input id="supplier" autocomplete="off" placeholder="npr. Knauf, JUB, Murexin">
       <div class="small" id="supplierHint" style="margin-top:4px">
         Če je EAN že znan, se dobavitelj izpolni samodejno.
@@ -107,6 +107,15 @@ video{display:block;width:100%;min-height:240px;max-height:62vh;object-fit:cover
     </label>
 
     <button class="add" onclick="addItem()">DODAJ NA SEZNAM</button>
+  </section>
+
+  <section class="card">
+    <h2>Pošiljanje naročila</h2>
+    <label>E-POŠTA PREJEMNIKA</label>
+    <input id="emailRecipient" type="email" autocomplete="email" placeholder="narocila@podjetje.si">
+    <div class="small" style="margin-top:5px">
+      Naslov se shrani v telefonu. Pri pošiljanju izberi Gmail, Outlook ali drugo e-poštno aplikacijo.
+    </div>
   </section>
 
   <section class="card">
@@ -129,7 +138,7 @@ video{display:block;width:100%;min-height:240px;max-height:62vh;object-fit:cover
 
 <div class="footer">
   <button class="clear" onclick="clearOrder()">POČISTI</button>
-  <button class="export" onclick="exportXlsx()">SHRANI + IZVOZI ZA FAW</button>
+  <button class="export" onclick="saveAndShareOrder()">SHRANI + POŠLJI NA MAIL</button>
 </div>
 
 <div id="scannerModal">
@@ -264,24 +273,22 @@ function addItem(){
     return;
   }
 
-  if(!s){
-    toast('Dobavitelj je obvezen.');
-    document.getElementById('supplier').focus();
-    return;
-  }
-
   if(!Number.isInteger(q)||q<1){
     toast('Količina mora biti najmanj 1.');
     return;
   }
 
-  supplierMap[e]=s;
+  const supplierName = s || supplierMap[e] || 'Brez dobavitelja';
 
-  const existing=items.find(x=>x.ean===e && x.supplier===s);
+  if(s && s !== 'Brez dobavitelja'){
+    supplierMap[e]=s;
+  }
+
+  const existing=items.find(x=>x.ean===e && x.supplier===supplierName);
   if(existing){
     existing.qty+=q;
   }else{
-    items.push({ean:e,qty:q,supplier:s});
+    items.push({ean:e,qty:q,supplier:supplierName});
   }
 
   save();
@@ -442,6 +449,123 @@ function archiveCurrentOrder(){
   }
 
   save();
+}
+
+
+function buildOrderFile(orderItems){
+  const wb=makeWorkbook(orderItems);
+  const data=XLSX.write(wb,{bookType:'xlsx',type:'array'});
+
+  const d=new Date();
+  const filename=
+    `narocilo_FAW_${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}.xlsx`;
+
+  const file=new File(
+    [data],
+    filename,
+    {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}
+  );
+
+  return {file,filename};
+}
+
+function buildMailSummary(orderItems){
+  const grouped={};
+
+  orderItems.forEach(x=>{
+    const supplier=x.supplier||'Brez dobavitelja';
+    if(!grouped[supplier]) grouped[supplier]=[];
+    grouped[supplier].push(x);
+  });
+
+  let text='Naročilo za FAW\\n\\n';
+
+  Object.entries(grouped).forEach(([supplier,rows])=>{
+    text+=supplier+'\\n';
+
+    rows.forEach(x=>{
+      text+=`${x.ean}  |  količina: ${x.qty}\\n`;
+    });
+
+    text+='\\n';
+  });
+
+  text+=`Skupaj različnih artiklov: ${orderItems.length}\\n`;
+  text+=`Skupaj količina: ${orderItems.reduce((s,x)=>s+x.qty,0)}`;
+
+  return text;
+}
+
+async function saveAndShareOrder(){
+  if(!items.length){
+    toast('Seznam je prazen.');
+    return;
+  }
+
+  if(typeof XLSX==='undefined'){
+    alert('Excel knjižnica se ni naložila.');
+    return;
+  }
+
+  const email=document.getElementById('emailRecipient').value.trim();
+
+  if(email){
+    savedEmail=email;
+    localStorage.setItem('faw_order_email',email);
+  }
+
+  // Shrani v zgodovino pred pošiljanjem.
+  archiveCurrentOrder();
+  save();
+  renderHistory();
+
+  const {file,filename}=buildOrderFile(items);
+  const summary=buildMailSummary(items);
+
+  try{
+    if(
+      navigator.share &&
+      navigator.canShare &&
+      navigator.canShare({files:[file]})
+    ){
+      await navigator.share({
+        title:'FAW naročilo',
+        text: email
+          ? `Pošlji naročilo na: ${email}\\n\\n${summary}`
+          : summary,
+        files:[file]
+      });
+
+      toast('Naročilo je shranjeno in pripravljeno za pošiljanje.');
+      return;
+    }
+  }catch(err){
+    if(err && err.name==='AbortError'){
+      toast('Naročilo je shranjeno. Pošiljanje preklicano.');
+      return;
+    }
+  }
+
+  // Rezerva: prenesi Excel in odpri novo e-pošto.
+  const url=URL.createObjectURL(file);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download=filename;
+  document.body.appendChild(a);
+  a.click();
+
+  setTimeout(()=>{
+    URL.revokeObjectURL(url);
+    a.remove();
+  },500);
+
+  const subject=encodeURIComponent('FAW naročilo');
+  const body=encodeURIComponent(
+    summary +
+    '\\n\\nExcel datoteka je bila shranjena v telefon. Dodaj jo kot priponko temu sporočilu.'
+  );
+
+  window.location.href=`mailto:${encodeURIComponent(email)}?subject=${subject}&body=${body}`;
 }
 
 function exportXlsx(){
@@ -794,13 +918,28 @@ document.getElementById('photoInput').addEventListener('change',async e=>{
 
 document.getElementById('ean').addEventListener('keydown',e=>{
   if(e.key==='Enter'){
+    const code=document.getElementById('ean').value.trim();
+    if(supplierMap[code]){
+      document.getElementById('supplier').value=supplierMap[code];
+    }
     const q=document.getElementById('qty');
-    q.focus();q.select();
+    q.focus();
+    q.select();
   }
 });
 document.getElementById('qty').addEventListener('keydown',e=>{
   if(e.key==='Enter') addItem();
 });
+
+
+const emailInput=document.getElementById('emailRecipient');
+if(emailInput){
+  emailInput.value=savedEmail;
+  emailInput.addEventListener('change',()=>{
+    savedEmail=emailInput.value.trim();
+    localStorage.setItem('faw_order_email',savedEmail);
+  });
+}
 
 render();
 </script>
