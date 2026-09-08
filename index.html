@@ -4,215 +4,397 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>FAW naročanje – EAN + količina</title>
-<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
+<script src="https://unpkg.com/@zxing/browser@0.1.5"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
 <style>
-body{margin:0;font-family:Arial,sans-serif;background:#f3f5f7;color:#18222c}
-header{background:#2f4f6c;color:#fff;padding:14px 16px;position:sticky;top:0}
-main{max-width:720px;margin:auto;padding:14px 14px 110px}
-.card{background:#fff;border:1px solid #d8e0e6;border-radius:12px;padding:14px;margin-bottom:12px}
-.scanBtn,.addBtn,.footer button{border:0;border-radius:10px;padding:14px;font-weight:800;font-size:16px;cursor:pointer}
-.scanBtn{width:100%;background:#c92833;color:#fff;margin-bottom:12px}
-.addBtn{width:100%;background:#2f4f6c;color:#fff;margin-top:10px}
-.form{display:grid;grid-template-columns:1fr 110px;gap:10px}
-label{display:block;font-size:12px;font-weight:700;margin-bottom:4px}
-input{width:100%;box-sizing:border-box;padding:13px;border:1px solid #aeb9c3;border-radius:8px;font-size:17px}
-.item{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid #edf1f4}
-.ean{font-weight:800}
-.qty{display:flex;align-items:center;border:1px solid #c9d2d9;border-radius:7px;overflow:hidden}
-.qty button{width:30px;height:30px;border:0;background:#edf1f4}
+:root{
+  --bg:#f3f5f7;--card:#fff;--ink:#18222c;--muted:#697683;
+  --line:#d8e0e6;--blue:#2f4f6c;--red:#c92833;--green:#2e7d32;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);font-family:Arial,Helvetica,sans-serif;color:var(--ink)}
+header{background:var(--blue);color:#fff;padding:14px 16px;position:sticky;top:0;z-index:20}
+header strong{font-size:20px}
+header div{font-size:12px;color:#d9e2e8;margin-top:3px}
+main{max-width:720px;margin:auto;padding:14px 14px 120px}
+.card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px}
+h2{font-size:18px;margin:0 0 8px}
+p{margin:0;color:var(--muted);line-height:1.45}
+.cameraButtons{display:grid;grid-template-columns:1.3fr 1fr;gap:8px;margin-bottom:12px}
+.bigbtn{border:0;border-radius:11px;padding:16px 10px;font-weight:800;font-size:15px;cursor:pointer}
+.live{background:var(--red);color:#fff}
+.photo{background:#fff;border:1px solid #b9c3cc;color:#263746}
+.form{display:grid;grid-template-columns:1fr 105px;gap:9px}
+label{display:block;font-size:12px;font-weight:700;color:#4c5965;margin-bottom:4px}
+input{width:100%;padding:13px;border:1px solid #aeb9c3;border-radius:8px;font-size:17px}
+.add{width:100%;margin-top:10px;background:var(--blue);color:#fff;border:0;border-radius:9px;padding:13px;font-size:16px;font-weight:800}
+.item{display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #edf1f4}
+.ean{font-size:16px;font-weight:800;word-break:break-all}
+.small{font-size:12px;color:var(--muted)}
+.qty{display:flex;border:1px solid #c9d2d9;border-radius:7px;overflow:hidden;align-items:center}
+.qty button{border:0;background:#edf1f4;width:30px;height:30px}
 .qty b{min-width:36px;text-align:center}
-.del{border:0;width:34px;height:32px;border-radius:7px;background:#f8dfe2;color:#a31e28;font-weight:800}
-.footer{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid #d8e0e6;display:grid;grid-template-columns:1fr 1.4fr;gap:8px;padding:10px 14px}
-.clear{background:#f4dfe1;color:#9e2028}.export{background:#2e7d32;color:#fff}
-#scannerModal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:100;padding:14px;align-items:center;justify-content:center}
-.scannerBox{width:min(560px,100%);background:#fff;border-radius:14px;overflow:hidden}
-.scannerHead{background:#2f4f6c;color:#fff;padding:12px 14px;font-weight:800;display:flex;justify-content:space-between}
+.del{border:0;background:#f8dfe2;color:#a31e28;width:34px;height:32px;border-radius:7px;font-weight:800}
+.summary{margin-top:10px;border-top:1px solid var(--line);padding-top:10px;display:flex;justify-content:space-between;font-weight:700;font-size:13px}
+.footer{position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid var(--line);padding:10px 14px calc(10px + env(safe-area-inset-bottom));display:grid;grid-template-columns:1fr 1.4fr;gap:8px;z-index:30}
+.footer button{border:0;border-radius:9px;padding:14px 8px;font-weight:800}
+.clear{background:#f4dfe1;color:#9e2028}.export{background:var(--green);color:#fff}
+#scannerModal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:100;padding:14px;align-items:center;justify-content:center}
+.scanner{width:min(620px,100%);background:#fff;border-radius:14px;overflow:hidden}
+.scannerHead{background:var(--blue);color:#fff;padding:11px 13px;display:flex;align-items:center;justify-content:space-between;font-weight:800}
+.scannerHead button{border:0;background:#fff;padding:7px 10px;border-radius:6px;font-weight:700}
 .scannerBody{padding:12px}
-.closeBtn{border:0;background:#fff;border-radius:6px;padding:7px 10px;font-weight:700}
-#reader{width:100%}
-.scanInfo,#errorBox{margin-top:8px;padding:9px;border-radius:8px;font-size:13px;line-height:1.4}
-.scanInfo{background:#eef5fa;border:1px solid #c9dce9}
-#errorBox{display:none;background:#fde8e8;border:1px solid #e6baba;color:#8b2020}
-.toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#1f2c37;color:#fff;padding:10px 14px;border-radius:999px;font-size:13px;display:none;z-index:200}
-@media(max-width:520px){.form{grid-template-columns:1fr 95px}}
+.videoWrap{position:relative;background:#000;border-radius:10px;overflow:hidden}
+video{display:block;width:100%;min-height:240px;max-height:62vh;object-fit:cover;background:#000}
+.scanLine{position:absolute;left:6%;right:6%;top:50%;height:2px;background:#ff3344;box-shadow:0 0 8px #ff3344}
+.scanFrame{position:absolute;left:5%;right:5%;top:35%;height:30%;border:2px solid rgba(255,255,255,.8);border-radius:8px;pointer-events:none}
+#cameraStatus,#cameraError{margin-top:8px;padding:9px;border-radius:8px;font-size:13px;line-height:1.4}
+#cameraStatus{background:#eef5fa;border:1px solid #c9dce9}
+#cameraError{display:none;background:#fde8e8;border:1px solid #e6baba;color:#8b2020}
+.cameraTools{display:flex;gap:8px;margin-top:8px}
+.cameraTools button{flex:1;border:1px solid #adb9c3;background:#f3f6f8;padding:10px;border-radius:8px;font-weight:700}
+#torchBtn{display:none}
+.toast{position:fixed;left:50%;bottom:95px;transform:translateX(-50%);background:#1f2c37;color:#fff;padding:10px 14px;border-radius:999px;font-size:13px;display:none;z-index:200;white-space:nowrap}
+#photoInput{display:none}
+@media(max-width:520px){.form{grid-template-columns:1fr 95px}.cameraButtons{grid-template-columns:1fr 1fr}}
 </style>
 </head>
 <body>
-<header><strong>FAW NAROČANJE</strong><div>EAN + količina</div></header>
+
+<header>
+  <strong>FAW NAROČANJE</strong>
+  <div>EAN + količina</div>
+</header>
+
 <main>
-<section class="card"><h2>Hitro naročanje</h2><p>Skeniraj EAN, vnesi količino in izvozi Excel za FAW.</p></section>
-<button class="scanBtn" onclick="openScanner()">📷 SKENIRAJ EAN</button>
-<section class="card">
-<div class="form">
-<div><label>EAN KODA *</label><input id="ean" inputmode="numeric" placeholder="3831234567890"></div>
-<div><label>KOLIČINA *</label><input id="qty" type="number" min="1" value="1"></div>
-</div>
-<button class="addBtn" onclick="addItem()">DODAJ NA SEZNAM</button>
-</section>
-<section class="card"><h2>Postavke</h2><div id="list"></div><div id="summary"></div></section>
+  <section class="card">
+    <h2>Hitro naročanje</h2>
+    <p>Skeniraj EAN, vnesi količino in izvozi Excel za direkten uvoz v FAW.</p>
+  </section>
+
+  <div class="cameraButtons">
+    <button class="bigbtn live" onclick="openScanner()">📷 SKENIRAJ V ŽIVO</button>
+    <button class="bigbtn photo" onclick="document.getElementById('photoInput').click()">📸 FOTOGRAFIRAJ KODO</button>
+  </div>
+
+  <input id="photoInput" type="file" accept="image/*" capture="environment">
+
+  <section class="card">
+    <div class="form">
+      <div>
+        <label>EAN KODA *</label>
+        <input id="ean" inputmode="numeric" autocomplete="off" placeholder="3831234567890">
+      </div>
+      <div>
+        <label>KOLIČINA *</label>
+        <input id="qty" type="number" min="1" step="1" value="1">
+      </div>
+    </div>
+    <button class="add" onclick="addItem()">DODAJ NA SEZNAM</button>
+  </section>
+
+  <section class="card">
+    <h2>Postavke</h2>
+    <div id="list"></div>
+    <div class="summary">
+      <span>Različnih EAN: <span id="itemCount">0</span></span>
+      <span>Skupaj kos: <span id="qtyCount">0</span></span>
+    </div>
+  </section>
 </main>
-<div class="footer"><button class="clear" onclick="clearOrder()">POČISTI</button><button class="export" onclick="exportXlsx()">IZVOZI EXCEL ZA FAW</button></div>
+
+<div class="footer">
+  <button class="clear" onclick="clearOrder()">POČISTI</button>
+  <button class="export" onclick="exportXlsx()">IZVOZI EXCEL ZA FAW</button>
+</div>
 
 <div id="scannerModal">
-<div class="scannerBox">
-<div class="scannerHead"><span>Skeniranje EAN</span><button class="closeBtn" onclick="closeScanner()">Zapri</button></div>
-<div class="scannerBody">
-<div id="reader"></div>
-<div id="zoomWrap" style="display:none;margin-top:10px">
-  <label style="font-size:12px;font-weight:700">Povečava kamere</label>
-  <input id="zoomSlider" type="range" min="1" max="1" step="0.1" value="1" style="width:100%">
+  <div class="scanner">
+    <div class="scannerHead">
+      <span>Skeniranje EAN</span>
+      <button onclick="closeScanner()">Zapri</button>
+    </div>
+    <div class="scannerBody">
+      <div class="videoWrap">
+        <video id="preview" autoplay muted playsinline></video>
+        <div class="scanFrame"></div>
+        <div class="scanLine"></div>
+      </div>
+
+      <div id="cameraStatus">Odpiram zadnjo kamero …</div>
+      <div id="cameraError"></div>
+
+      <div class="cameraTools">
+        <button id="torchBtn" onclick="toggleTorch()">🔦 Lučka</button>
+        <button onclick="restartScanner()">↻ Poskusi znova</button>
+      </div>
+    </div>
+  </div>
 </div>
-<div class="scanInfo">Usmeri zadnjo kamero v črtno kodo. Drži telefon približno 15–30 cm od kode.</div>
-<div id="errorBox"></div>
-</div>
-</div>
-</div>
+
 <div id="toast" class="toast"></div>
 
 <script>
-let items=JSON.parse(localStorage.getItem('faw_simple_order')||'[]');
-let scanner=null,scanning=false;
-function save(){localStorage.setItem('faw_simple_order',JSON.stringify(items))}
-function toast(m){const t=document.getElementById('toast');t.textContent=m;t.style.display='block';clearTimeout(window.tt);window.tt=setTimeout(()=>t.style.display='none',1800)}
-function validEAN(e){return /^[0-9]{8,14}$/.test(e)}
+let items = JSON.parse(localStorage.getItem('faw_ean_qty_v3') || '[]');
+let reader = null;
+let controls = null;
+let torchOn = false;
+let scanLocked = false;
+
+function save(){
+  localStorage.setItem('faw_ean_qty_v3', JSON.stringify(items));
+}
+
+function toast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg;
+  t.style.display='block';
+  clearTimeout(window.toastTimer);
+  window.toastTimer=setTimeout(()=>t.style.display='none',1800);
+}
+
+function validEAN(code){
+  return /^[0-9]{8,14}$/.test(code);
+}
+
+function normalizeCode(text){
+  return String(text || '').replace(/\D/g,'');
+}
+
+function setScannedCode(code){
+  if(!validEAN(code)) return false;
+  document.getElementById('ean').value=code;
+  setTimeout(()=>{
+    const q=document.getElementById('qty');
+    q.focus();
+    q.select();
+  },150);
+  toast('EAN skeniran. Vnesi količino.');
+  return true;
+}
+
 function addItem(){
- const e=document.getElementById('ean').value.trim();
- const q=parseInt(document.getElementById('qty').value,10);
- if(!validEAN(e)){toast('EAN mora imeti 8–14 številk.');return}
- if(!Number.isInteger(q)||q<1){toast('Količina mora biti najmanj 1.');return}
- const ex=items.find(x=>x.ean===e); if(ex) ex.qty+=q; else items.push({ean:e,qty:q});
- save();render();document.getElementById('ean').value='';document.getElementById('qty').value='1';document.getElementById('ean').focus()
+  const e=document.getElementById('ean').value.trim();
+  const q=parseInt(document.getElementById('qty').value,10);
+
+  if(!validEAN(e)){
+    toast('EAN mora imeti 8–14 številk.');
+    document.getElementById('ean').focus();
+    return;
+  }
+  if(!Number.isInteger(q) || q<1){
+    toast('Količina mora biti najmanj 1.');
+    document.getElementById('qty').focus();
+    return;
+  }
+
+  const existing=items.find(x=>x.ean===e);
+  if(existing) existing.qty+=q;
+  else items.push({ean:e,qty:q});
+
+  save();
+  render();
+
+  document.getElementById('ean').value='';
+  document.getElementById('qty').value='1';
+  document.getElementById('ean').focus();
 }
+
 function render(){
- const l=document.getElementById('list');
- l.innerHTML=items.length?items.map((x,i)=>`<div class="item"><div><div class="ean">${x.ean}</div><small>EAN</small></div><div class="qty"><button onclick="chg(${i},-1)">−</button><b>${x.qty}</b><button onclick="chg(${i},1)">+</button></div><button class="del" onclick="del(${i})">×</button></div>`).join(''):'Seznam je prazen.';
- document.getElementById('summary').textContent=`Različnih EAN: ${items.length} | Skupaj kos: ${items.reduce((s,x)=>s+x.qty,0)}`
+  const list=document.getElementById('list');
+  list.innerHTML=items.length
+    ? items.map((x,i)=>`
+      <div class="item">
+        <div><div class="ean">${x.ean}</div><div class="small">EAN</div></div>
+        <div class="qty">
+          <button onclick="changeQty(${i},-1)">−</button>
+          <b>${x.qty}</b>
+          <button onclick="changeQty(${i},1)">+</button>
+        </div>
+        <button class="del" onclick="removeItem(${i})">×</button>
+      </div>`).join('')
+    : '<div class="small">Seznam je prazen.</div>';
+
+  document.getElementById('itemCount').textContent=items.length;
+  document.getElementById('qtyCount').textContent=items.reduce((s,x)=>s+x.qty,0);
 }
-function chg(i,d){items[i].qty=Math.max(1,items[i].qty+d);save();render()}
-function del(i){items.splice(i,1);save();render()}
-function clearOrder(){if(confirm('Izbrišem celotno naročilo?')){items=[];save();render()}}
+
+function changeQty(i,d){
+  items[i].qty=Math.max(1,items[i].qty+d);
+  save();render();
+}
+
+function removeItem(i){
+  items.splice(i,1);
+  save();render();
+}
+
+function clearOrder(){
+  if(items.length && confirm('Izbrišem celotno naročilo?')){
+    items=[];
+    save();render();
+  }
+}
+
 function exportXlsx(){
- if(!items.length){toast('Seznam je prazen.');return}
- if(typeof XLSX==='undefined'){alert('Excel knjižnica se ni naložila.');return}
- const rows=[['EAN','Količina'],...items.map(x=>[String(x.ean),Number(x.qty)])];
- const ws=XLSX.utils.aoa_to_sheet(rows);
- for(let r=1;r<rows.length;r++){
-   const a=ws[XLSX.utils.encode_cell({r:r,c:0})]; if(a){a.t='s';a.z='@'}
-   const b=ws[XLSX.utils.encode_cell({r:r,c:1})]; if(b){b.t='n';b.z='0'}
- }
- ws['!cols']=[{wch:20},{wch:12}];
- const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Narocilo');
- XLSX.writeFile(wb,'narocilo_FAW.xlsx',{bookType:'xlsx'});
+  if(!items.length){toast('Seznam je prazen.');return;}
+  if(typeof XLSX==='undefined'){alert('Excel knjižnica se ni naložila.');return;}
+
+  const rows=[['EAN','Količina'],...items.map(x=>[String(x.ean),Number(x.qty)])];
+  const ws=XLSX.utils.aoa_to_sheet(rows);
+
+  for(let r=1;r<rows.length;r++){
+    const a=ws[XLSX.utils.encode_cell({r,c:0})];
+    const b=ws[XLSX.utils.encode_cell({r,c:1})];
+    if(a){a.t='s';a.z='@';a.v=String(rows[r][0]);}
+    if(b){b.t='n';b.z='0';b.v=Number(rows[r][1]);}
+  }
+
+  ws['!cols']=[{wch:20},{wch:12}];
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'Narocilo');
+  XLSX.writeFile(wb,'narocilo_FAW.xlsx',{bookType:'xlsx'});
 }
+
 async function openScanner(){
- const modal=document.getElementById('scannerModal');
- const err=document.getElementById('errorBox');
- const zoomWrap=document.getElementById('zoomWrap');
- const zoomSlider=document.getElementById('zoomSlider');
+  const modal=document.getElementById('scannerModal');
+  const status=document.getElementById('cameraStatus');
+  const error=document.getElementById('cameraError');
+  const torchBtn=document.getElementById('torchBtn');
 
- err.style.display='none';
- err.textContent='';
- zoomWrap.style.display='none';
- modal.style.display='flex';
+  modal.style.display='flex';
+  error.style.display='none';
+  error.textContent='';
+  torchBtn.style.display='none';
+  status.textContent='Odpiram zadnjo kamero …';
+  scanLocked=false;
 
- try{
-  if(!window.isSecureContext) throw new Error('Stran mora biti odprta prek HTTPS.');
-  if(!navigator.mediaDevices?.getUserMedia) throw new Error('Brskalnik ne omogoča dostopa do kamere.');
+  try{
+    if(!window.isSecureContext){
+      throw new Error('Stran ni odprta prek HTTPS.');
+    }
+    if(typeof ZXingBrowser==='undefined'){
+      throw new Error('ZXing knjižnica se ni naložila. Preveri internetno povezavo.');
+    }
 
-  scanner=new Html5Qrcode('reader');
+    reader=new ZXingBrowser.BrowserMultiFormatReader();
 
-  // Use environment camera directly; this was the working version.
-  const cameraConfig={facingMode:"environment"};
-
-  await scanner.start(
-    cameraConfig,
-    {
-      fps:10,
-      qrbox:(w,h)=>({
-        width:Math.floor(w*.86),
-        height:Math.floor(Math.min(170,h*.34))
-      }),
-      aspectRatio:1.777778,
-      disableFlip:true,
-      formatsToSupport:[
-        Html5QrcodeSupportedFormats.EAN_13,
-        Html5QrcodeSupportedFormats.EAN_8,
-        Html5QrcodeSupportedFormats.UPC_A,
-        Html5QrcodeSupportedFormats.UPC_E,
-        Html5QrcodeSupportedFormats.CODE_128
-      ]
-    },
-    txt=>{
-      const code=(txt||'').replace(/\D/g,'');
-      if(validEAN(code)){
-        document.getElementById('ean').value=code;
-        closeScanner();
-        setTimeout(()=>{
-          document.getElementById('qty').focus();
-          document.getElementById('qty').select();
-        },200);
-        toast('EAN skeniran. Vnesi količino.');
+    controls=await reader.decodeFromVideoDevice(
+      undefined,
+      document.getElementById('preview'),
+      (result,err,ctrl)=>{
+        if(result && !scanLocked){
+          const code=normalizeCode(result.getText ? result.getText() : result.text);
+          if(validEAN(code)){
+            scanLocked=true;
+            setScannedCode(code);
+            closeScanner();
+          }
+        }
       }
-    },
-    ()=>{}
-  );
+    );
 
-  scanning=true;
+    status.textContent='Kamera deluje. Postavi EAN v beli okvir.';
 
-  // Only tune the already-working camera after it is visible.
-  setTimeout(async ()=>{
-    try{
-      const video=document.querySelector('#reader video');
-      const track=video?.srcObject?.getVideoTracks?.()[0];
-      if(!track) return;
+    if(controls && typeof controls.switchTorch==='function'){
+      torchBtn.style.display='block';
+    }
 
-      const caps=track.getCapabilities ? track.getCapabilities() : {};
-      const advanced=[];
-
-      if(caps.focusMode && caps.focusMode.includes('continuous')){
-        advanced.push({focusMode:'continuous'});
-      }
-
-      if(caps.zoom){
-        const min=Number(caps.zoom.min ?? 1);
-        const max=Number(caps.zoom.max ?? 1);
-        const start=Math.max(min, Math.min(1, max));
-
-        zoomSlider.min=min;
-        zoomSlider.max=max;
-        zoomSlider.step=caps.zoom.step || 0.1;
-        zoomSlider.value=start;
-        zoomWrap.style.display='block';
-
-        zoomSlider.oninput=async ()=>{
-          try{
-            await track.applyConstraints({
-              advanced:[{zoom:Number(zoomSlider.value)}]
-            });
-          }catch(e){}
-        };
-      }
-
-      if(advanced.length){
-        try{
-          await track.applyConstraints({advanced});
-        }catch(e){}
-      }
-    }catch(e){}
-  },900);
-
- }catch(e){
-  err.style.display='block';
-  err.innerHTML='<strong>Kamera se ni odprla.</strong><br>'+String(e.message||e)+'<br><br>Preveri dovoljenje za kamero in da stran odpiraš direktno v Chromu prek HTTPS.';
- }
+  }catch(e){
+    error.style.display='block';
+    error.innerHTML='<strong>Kamera se ni odprla.</strong><br>' +
+      String(e && e.message ? e.message : e) +
+      '<br><br>Odpri stran neposredno v Chrome prek HTTPS in preveri dovoljenje Kamera.';
+    status.textContent='Uporabi lahko tudi gumb »Fotografiraj kodo«.';
+  }
 }
+
 async function closeScanner(){
- if(scanner){try{if(scanning)await scanner.stop();await scanner.clear()}catch(e){}}
- scanner=null;scanning=false;document.getElementById('scannerModal').style.display='none';document.getElementById('reader').innerHTML=''
+  try{
+    if(controls && typeof controls.stop==='function'){
+      await controls.stop();
+    }
+  }catch(e){}
+
+  controls=null;
+  reader=null;
+  torchOn=false;
+
+  const video=document.getElementById('preview');
+  if(video.srcObject){
+    try{video.srcObject.getTracks().forEach(t=>t.stop());}catch(e){}
+    video.srcObject=null;
+  }
+
+  document.getElementById('scannerModal').style.display='none';
 }
-document.getElementById('ean').addEventListener('keydown',e=>{if(e.key==='Enter'){document.getElementById('qty').focus();document.getElementById('qty').select()}});
-document.getElementById('qty').addEventListener('keydown',e=>{if(e.key==='Enter')addItem()});
+
+async function restartScanner(){
+  await closeScanner();
+  setTimeout(openScanner,250);
+}
+
+async function toggleTorch(){
+  if(!controls || typeof controls.switchTorch!=='function') return;
+  try{
+    torchOn=!torchOn;
+    await controls.switchTorch(torchOn);
+    document.getElementById('torchBtn').textContent=torchOn?'🔦 Izklopi lučko':'🔦 Lučka';
+  }catch(e){
+    toast('Lučka na tej kameri ni podprta.');
+  }
+}
+
+document.getElementById('photoInput').addEventListener('change',async e=>{
+  const file=e.target.files && e.target.files[0];
+  if(!file) return;
+
+  if(typeof ZXingBrowser==='undefined'){
+    alert('ZXing knjižnica se ni naložila.');
+    return;
+  }
+
+  const url=URL.createObjectURL(file);
+  const img=new Image();
+
+  img.onload=async()=>{
+    try{
+      const imageReader=new ZXingBrowser.BrowserMultiFormatReader();
+      const result=await imageReader.decodeFromImageElement(img);
+      const code=normalizeCode(result.getText ? result.getText() : result.text);
+
+      if(!setScannedCode(code)){
+        alert('Na fotografiji nisem našel veljavne EAN kode.');
+      }
+    }catch(err){
+      alert('Kode na fotografiji nisem uspel prebrati. Poskusi bližje in naj bo koda ostra.');
+    }finally{
+      URL.revokeObjectURL(url);
+      e.target.value='';
+    }
+  };
+
+  img.onerror=()=>{
+    URL.revokeObjectURL(url);
+    e.target.value='';
+    alert('Fotografije ni bilo mogoče odpreti.');
+  };
+
+  img.src=url;
+});
+
+document.getElementById('ean').addEventListener('keydown',e=>{
+  if(e.key==='Enter'){
+    const q=document.getElementById('qty');
+    q.focus();q.select();
+  }
+});
+document.getElementById('qty').addEventListener('keydown',e=>{
+  if(e.key==='Enter') addItem();
+});
+
 render();
 </script>
 </body>
