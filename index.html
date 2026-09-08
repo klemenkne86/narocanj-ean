@@ -679,7 +679,7 @@ async function openScanner(){
 
   try{
     if(!window.isSecureContext){
-      throw new Error('Stran ni odprta prek HTTPS.');
+      throw new Error('Kamera v brskalniku deluje samo prek HTTPS. Datoteke ne odpiraj neposredno iz Prenosov, ampak prek HTTPS povezave (ali localhosta).');
     }
     if(!navigator.mediaDevices?.getUserMedia){
       throw new Error('Brskalnik ne omogoča dostopa do kamere.');
@@ -770,11 +770,18 @@ async function startSelectedCamera(){
   currentDeviceId=deviceId;
 
   try{
-    reader=new ZXingBrowser.BrowserMultiFormatReader();
+    const video=document.getElementById('preview');
+    reader=new ZXingBrowser.BrowserMultiFormatReader(undefined,250);
 
-    controls=await reader.decodeFromVideoDevice(
-      deviceId || undefined,
-      document.getElementById('preview'),
+    // decodeFromConstraints je na Androidu zanesljivejši od decodeFromVideoDevice:
+    // brskalnik sam odpre izbrano lečo z ustreznimi video omejitvami.
+    const videoConstraints=deviceId
+      ? {deviceId:{exact:deviceId},width:{ideal:1920},height:{ideal:1080}}
+      : {facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}};
+
+    controls=await reader.decodeFromConstraints(
+      {video:videoConstraints,audio:false},
+      video,
       (result)=>{
         if(result && !scanLocked){
           const code=normalizeCode(result.getText ? result.getText() : result.text);
@@ -799,7 +806,13 @@ async function startSelectedCamera(){
 
   }catch(e){
     error.style.display='block';
-    error.innerHTML='<strong>Te kamere ni bilo mogoče zagnati.</strong><br>'+String(e?.message||e);
+    const message=String(e?.message||e);
+    const help=(e?.name==='NotAllowedError')
+      ? 'Dovoli dostop do kamere v Chromu in nato ponovno odpri skener.'
+      : (e?.name==='NotFoundError' || e?.name==='OverconstrainedError')
+        ? 'Izbrana kamera ni na voljo. Izberi drugo kamero in pritisni Zaženi.'
+        : 'Preveri, da je stran odprta prek HTTPS in da druga aplikacija ne uporablja kamere.';
+    error.innerHTML='<strong>Kamere ni bilo mogoče zagnati.</strong><br>'+message+'<br><br>'+help;
   }
 }
 
