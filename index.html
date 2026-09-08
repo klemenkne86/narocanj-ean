@@ -121,51 +121,46 @@ async function openScanner(){
   if(!navigator.mediaDevices?.getUserMedia) throw new Error('Brskalnik ne omogoča dostopa do kamere.');
 
   scanner=new Html5Qrcode('reader');
-  const cams=await Html5Qrcode.getCameras();
-  if(!cams.length) throw new Error('Telefon ni vrnil nobene kamere.');
 
-  // Prefer main rear camera. Avoid front / ultra-wide where possible.
-  const rear=cams.filter(c=>/back|rear|environment|zadnja|zadaj/i.test(c.label||''));
-  let candidates=rear.length?rear:cams;
+  // Use environment camera directly; this was the working version.
+  const cameraConfig={facingMode:"environment"};
 
-  const preferred =
-    candidates.find(c=>/main|primary|camera 0|camera2 0/i.test(c.label||'')) ||
-    candidates.find(c=>!/ultra|wide|macro|front|selfie/i.test(c.label||'')) ||
-    candidates[0];
-
-  const id=preferred.id;
-
-  await scanner.start(id,{
-    fps:10,
-    qrbox:(w,h)=>({
-      width:Math.floor(w*.88),
-      height:Math.floor(Math.min(180,h*.34))
-    }),
-    aspectRatio:1.777778,
-    disableFlip:true,
-    formatsToSupport:[
-      Html5QrcodeSupportedFormats.EAN_13,
-      Html5QrcodeSupportedFormats.EAN_8,
-      Html5QrcodeSupportedFormats.UPC_A,
-      Html5QrcodeSupportedFormats.UPC_E,
-      Html5QrcodeSupportedFormats.CODE_128
-    ]
-  },txt=>{
-    const code=(txt||'').replace(/\D/g,'');
-    if(validEAN(code)){
-      document.getElementById('ean').value=code;
-      closeScanner();
-      setTimeout(()=>{
-        document.getElementById('qty').focus();
-        document.getElementById('qty').select();
-      },200);
-      toast('EAN skeniran. Vnesi količino.');
-    }
-  },()=>{});
+  await scanner.start(
+    cameraConfig,
+    {
+      fps:10,
+      qrbox:(w,h)=>({
+        width:Math.floor(w*.86),
+        height:Math.floor(Math.min(170,h*.34))
+      }),
+      aspectRatio:1.777778,
+      disableFlip:true,
+      formatsToSupport:[
+        Html5QrcodeSupportedFormats.EAN_13,
+        Html5QrcodeSupportedFormats.EAN_8,
+        Html5QrcodeSupportedFormats.UPC_A,
+        Html5QrcodeSupportedFormats.UPC_E,
+        Html5QrcodeSupportedFormats.CODE_128
+      ]
+    },
+    txt=>{
+      const code=(txt||'').replace(/\D/g,'');
+      if(validEAN(code)){
+        document.getElementById('ean').value=code;
+        closeScanner();
+        setTimeout(()=>{
+          document.getElementById('qty').focus();
+          document.getElementById('qty').select();
+        },200);
+        toast('EAN skeniran. Vnesi količino.');
+      }
+    },
+    ()=>{}
+  );
 
   scanning=true;
 
-  // After video starts, tune the actual camera track.
+  // Only tune the already-working camera after it is visible.
   setTimeout(async ()=>{
     try{
       const video=document.querySelector('#reader video');
@@ -179,15 +174,15 @@ async function openScanner(){
         advanced.push({focusMode:'continuous'});
       }
 
-      // Start at optical 1x. Excessive digital zoom often hurts barcode focus.
       if(caps.zoom){
-        const startZoom=Math.max(caps.zoom.min||1, Math.min(1, caps.zoom.max||1));
-        advanced.push({zoom:startZoom});
+        const min=Number(caps.zoom.min ?? 1);
+        const max=Number(caps.zoom.max ?? 1);
+        const start=Math.max(min, Math.min(1, max));
 
-        zoomSlider.min=caps.zoom.min;
-        zoomSlider.max=caps.zoom.max;
-        zoomSlider.step=caps.zoom.step||0.1;
-        zoomSlider.value=startZoom;
+        zoomSlider.min=min;
+        zoomSlider.max=max;
+        zoomSlider.step=caps.zoom.step || 0.1;
+        zoomSlider.value=start;
         zoomWrap.style.display='block';
 
         zoomSlider.oninput=async ()=>{
@@ -205,7 +200,7 @@ async function openScanner(){
         }catch(e){}
       }
     }catch(e){}
-  },700);
+  },900);
 
  }catch(e){
   err.style.display='block';
