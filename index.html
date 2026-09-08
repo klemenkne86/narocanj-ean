@@ -106,22 +106,21 @@ video{display:block;width:100%;min-height:240px;max-height:62vh;object-fit:cover
       Hitri način: po dodani količini takoj odpri kamero za naslednji artikel
     </label>
 
-    <button class="add" onclick="addItem()">DODAJ NA SEZNAM</button>
+    <button class="add" onclick="addItem(true)">DODAJ NA SEZNAM</button>
   </section>
 
   <section class="card">
     <h2>Pošiljanje naročila</h2>
 
-    <label>PREJEMNIK 1</label>
-    <input id="emailRecipient1" type="email" autocomplete="email"
-           value="klemen.kne@domtrade.si">
-
-    <label style="margin-top:8px">PREJEMNIK 2</label>
-    <input id="emailRecipient2" type="email" autocomplete="email"
-           value="Info.zabnica@domtrade.si">
+    <label>IZBERI PREJEMNIKA</label>
+    <select id="emailRecipientSelect" style="width:100%;padding:12px;border:1px solid #aeb9c3;border-radius:8px;font-size:16px;background:#fff">
+      <option value="klemen.kne@domtrade.si">klemen.kne@domtrade.si</option>
+      <option value="Info.zabnica@domtrade.si">Info.zabnica@domtrade.si</option>
+      <option value="klemen.kne@gmail.com">klemen.kne@gmail.com</option>
+    </select>
 
     <div class="small" style="margin-top:5px">
-      Oba naslova sta že nastavljena in se shranita v telefonu.
+      Ob kliku »Shrani + pošlji« bo aplikacija uporabila izbrani naslov.
     </div>
   </section>
 
@@ -197,8 +196,7 @@ video{display:block;width:100%;min-height:240px;max-height:62vh;object-fit:cover
 let items = JSON.parse(localStorage.getItem('faw_ean_qty_v3') || '[]');
 let supplierMap = JSON.parse(localStorage.getItem('faw_supplier_map') || '{}');
 let history = JSON.parse(localStorage.getItem('faw_order_history') || '[]');
-let savedEmail1 = localStorage.getItem('faw_order_email_1') || 'klemen.kne@domtrade.si';
-let savedEmail2 = localStorage.getItem('faw_order_email_2') || 'Info.zabnica@domtrade.si';
+let savedRecipient = localStorage.getItem('faw_order_recipient') || 'klemen.kne@domtrade.si';
 let reader = null;
 let controls = null;
 let torchOn = false;
@@ -210,8 +208,7 @@ function save(){
   localStorage.setItem('faw_ean_qty_v3', JSON.stringify(items));
   localStorage.setItem('faw_supplier_map', JSON.stringify(supplierMap));
   localStorage.setItem('faw_order_history', JSON.stringify(history));
-  localStorage.setItem('faw_order_email_1', savedEmail1 || '');
-  localStorage.setItem('faw_order_email_2', savedEmail2 || '');
+  localStorage.setItem('faw_order_recipient', savedRecipient || 'klemen.kne@domtrade.si');
 }
 
 function toast(msg){
@@ -278,7 +275,7 @@ function focusQuantity(){
   q.select();
 }
 
-function addItem(){
+function addItem(reopenScanner=false){
   const e=document.getElementById('ean').value.trim();
   const q=parseInt(document.getElementById('qty').value,10);
   const s=document.getElementById('supplier').value.trim();
@@ -308,10 +305,7 @@ function addItem(){
 
   save();
   render();
-
-  const reopen=document.getElementById('fastMode').checked && lastInputWasScan;
-
-  document.getElementById('ean').value='';
+document.getElementById('ean').value='';
   document.getElementById('qty').value='1';
   document.getElementById('supplier').value='';
   document.getElementById('supplierHint').textContent='Dobavitelj ni obvezen. Če ga poznamo, se izpolni samodejno.';
@@ -319,11 +313,13 @@ function addItem(){
 
   toast(existing ? 'Količina povečana.' : 'Artikel dodan.');
 
-  if(reopen){
-    setTimeout(()=>openScanner(),350);
+  if(reopenScanner){
+    setTimeout(()=>openScanner(),300);
   }else{
     document.getElementById('ean').focus();
   }
+
+  
 }
 
 function render(){
@@ -522,16 +518,11 @@ async function saveAndShareOrder(){
     return;
   }
 
-  const email1=document.getElementById('emailRecipient1').value.trim();
-  const email2=document.getElementById('emailRecipient2').value.trim();
-  const emails=[email1,email2].filter(Boolean);
+  const recipient=document.getElementById('emailRecipientSelect').value;
+  savedRecipient=recipient;
+  localStorage.setItem('faw_order_recipient',savedRecipient);
 
-  savedEmail1=email1;
-  savedEmail2=email2;
-  localStorage.setItem('faw_order_email_1',savedEmail1);
-  localStorage.setItem('faw_order_email_2',savedEmail2);
-
-  // Shrani v zgodovino pred pošiljanjem.
+  // Shrani v zgodovino najprej.
   archiveCurrentOrder();
   save();
   renderHistory();
@@ -539,31 +530,36 @@ async function saveAndShareOrder(){
   const {file,filename}=buildOrderFile(items);
   const summary=buildMailSummary(items);
 
-  try{
-    if(
-      navigator.share &&
-      navigator.canShare &&
-      navigator.canShare({files:[file]})
-    ){
-      await navigator.share({
-        title:'FAW naročilo',
-        text: email
-          ? `Pošlji naročilo na: ${email}\\n\\n${summary}`
-          : summary,
-        files:[file]
+  // Popolnoma avtomatsko pošiljanje zahteva backend/mail API.
+  // Ko bo endpoint nastavljen, bo ta gumb poslal brez odpiranja Gmaila.
+  const SEND_API_URL = localStorage.getItem('faw_send_api_url') || '';
+
+  if(SEND_API_URL){
+    try{
+      const form=new FormData();
+      form.append('to',recipient);
+      form.append('subject','FAW naročilo');
+      form.append('message',summary);
+      form.append('file',file,filename);
+
+      const res=await fetch(SEND_API_URL,{
+        method:'POST',
+        body:form
       });
 
-      toast('Naročilo je shranjeno in pripravljeno za pošiljanje.');
+      if(!res.ok){
+        throw new Error('HTTP '+res.status);
+      }
+
+      toast('Naročilo je shranjeno in poslano na '+recipient);
       return;
-    }
-  }catch(err){
-    if(err && err.name==='AbortError'){
-      toast('Naročilo je shranjeno. Pošiljanje preklicano.');
-      return;
+    }catch(err){
+      console.error(err);
+      toast('Pošiljanje prek API ni uspelo. Excel bom shranil.');
     }
   }
 
-  // Rezerva: prenesi Excel in odpri novo e-pošto.
+  // Dokler API ni povezan, vedno shrani Excel lokalno.
   const url=URL.createObjectURL(file);
   const a=document.createElement('a');
   a.href=url;
@@ -576,14 +572,11 @@ async function saveAndShareOrder(){
     a.remove();
   },500);
 
-  const subject=encodeURIComponent('FAW naročilo');
-  const body=encodeURIComponent(
-    summary +
-    '\\n\\nExcel datoteka je bila shranjena v telefon. Dodaj jo kot priponko temu sporočilu.'
+  alert(
+    'Naročilo je shranjeno v zgodovino in Excel je prenesen.\\n\\n' +
+    'Za avtomatsko pošiljanje brez Gmail okna morava povezati mail API.\\n' +
+    'Izbran prejemnik: '+recipient
   );
-
-  const mailTo = emails.map(x=>encodeURIComponent(x)).join(',');
-  window.location.href=`mailto:${mailTo}?subject=${subject}&body=${body}`;
 }
 
 function exportXlsx(){
@@ -633,7 +626,21 @@ function restoreHistory(i){
 
   items=JSON.parse(JSON.stringify(h.items));
   save();
-  render();
+  function setMailApiUrl(url){
+  localStorage.setItem('faw_send_api_url', String(url||'').trim());
+  toast('Mail API naslov je shranjen.');
+}
+
+const recipientSelect=document.getElementById('emailRecipientSelect');
+if(recipientSelect){
+  recipientSelect.value=savedRecipient;
+  recipientSelect.addEventListener('change',()=>{
+    savedRecipient=recipientSelect.value;
+    localStorage.setItem('faw_order_recipient',savedRecipient);
+  });
+}
+
+render();
   toast('Naročilo iz zgodovine je odprto.');
 }
 
@@ -963,34 +970,12 @@ document.getElementById('supplier').addEventListener('keydown',e=>{
 document.getElementById('qty').addEventListener('keydown',e=>{
   if(e.key==='Enter'){
     e.preventDefault();
-
-    // Dobavitelj NI obvezen.
-    // Potrditev količine takoj doda artikel na naročilo.
-    addItem();
+    addItem(true);
   }
 });
 
 
-const emailInput1=document.getElementById('emailRecipient1');
-const emailInput2=document.getElementById('emailRecipient2');
 
-if(emailInput1){
-  emailInput1.value=savedEmail1;
-  emailInput1.addEventListener('change',()=>{
-    savedEmail1=emailInput1.value.trim();
-    localStorage.setItem('faw_order_email_1',savedEmail1);
-  });
-}
-
-if(emailInput2){
-  emailInput2.value=savedEmail2;
-  emailInput2.addEventListener('change',()=>{
-    savedEmail2=emailInput2.value.trim();
-    localStorage.setItem('faw_order_email_2',savedEmail2);
-  });
-}
-
-render();
 </script>
 </body>
 </html>
