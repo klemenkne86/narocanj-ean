@@ -188,6 +188,9 @@ video{display:block;width:100%;min-height:240px;max-height:62vh;object-fit:cover
 
 <script>
 let items = JSON.parse(localStorage.getItem('faw_ean_qty_v3') || '[]');
+let supplierMap = JSON.parse(localStorage.getItem('faw_supplier_map') || '{}');
+let history = JSON.parse(localStorage.getItem('faw_order_history') || '[]');
+let savedEmail = localStorage.getItem('faw_order_email') || '';
 let reader = null;
 let controls = null;
 let torchOn = false;
@@ -197,6 +200,9 @@ let currentDeviceId = null;
 
 function save(){
   localStorage.setItem('faw_ean_qty_v3', JSON.stringify(items));
+  localStorage.setItem('faw_supplier_map', JSON.stringify(supplierMap));
+  localStorage.setItem('faw_order_history', JSON.stringify(history));
+  localStorage.setItem('faw_order_email', savedEmail || '');
 }
 
 function toast(msg){
@@ -927,6 +933,14 @@ document.getElementById('ean').addEventListener('keydown',e=>{
     q.select();
   }
 });
+document.getElementById('supplier').addEventListener('keydown',e=>{
+  if(e.key==='Enter'){
+    const q=document.getElementById('qty');
+    q.focus();
+    q.select();
+  }
+});
+
 document.getElementById('qty').addEventListener('keydown',e=>{
   if(e.key==='Enter') addItem();
 });
