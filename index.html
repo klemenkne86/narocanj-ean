@@ -677,6 +677,15 @@ async function openScanner(){
   document.getElementById('zoomBox').style.display='none';
   document.getElementById('focusBox').style.display='none';
 
+  const select=document.getElementById('cameraSelect');
+  const setAutomaticCameraOption=()=>{
+    select.innerHTML='';
+    const opt=document.createElement('option');
+    opt.value='';
+    opt.textContent='Zadnja kamera (samodejno)';
+    select.appendChild(opt);
+  };
+
   try{
     if(!window.isSecureContext){
       throw new Error('Kamera v brskalniku deluje samo prek HTTPS. Datoteke ne odpiraj neposredno iz Prenosov, ampak prek HTTPS povezave (ali localhosta).');
@@ -689,20 +698,32 @@ async function openScanner(){
     }
 
     // Dovoljenje najprej: šele nato Android pokaže prava imena/leče.
-    const temp=await navigator.mediaDevices.getUserMedia({
-      video:{facingMode:{ideal:'environment'}},
-      audio:false
-    });
+    let temp;
+    try{
+      temp=await navigator.mediaDevices.getUserMedia({
+        video:{facingMode:{ideal:'environment'}},
+        audio:false
+      });
+    }catch(permissionError){
+      // Nekateri Androidi ne vrnejo seznama kamer, dokler uporabnik ne potrdi
+      // dovoljenja. Vseeno ponudi neposreden zagon zadnje kamere.
+      setAutomaticCameraOption();
+      status.textContent='Seznama kamer telefon ni vrnil. Poskušam odpreti zadnjo kamero …';
+      await startSelectedCamera();
+      return;
+    }
     temp.getTracks().forEach(t=>t.stop());
 
     const devices=await navigator.mediaDevices.enumerateDevices();
     const cams=devices.filter(d=>d.kind==='videoinput');
 
     if(!cams.length){
-      throw new Error('Telefon ni vrnil nobene kamere.');
+      setAutomaticCameraOption();
+      status.textContent='Seznama kamer telefon ni vrnil. Poskušam odpreti zadnjo kamero …';
+      await startSelectedCamera();
+      return;
     }
 
-    const select=document.getElementById('cameraSelect');
     select.innerHTML='';
 
     cams.forEach((cam,i)=>{
@@ -733,9 +754,11 @@ async function openScanner(){
     await startSelectedCamera();
 
   }catch(e){
-    error.style.display='block';
-    error.innerHTML='<strong>Kamera se ni odprla.</strong><br>'+String(e?.message||e);
-    status.textContent='Fotografiranje kode lahko še vedno uporabiš.';
+    // Tudi če enumerateDevices odpove, lahko veliko telefonov še vedno odpre
+    // zadnjo kamero neposredno prek facingMode: environment.
+    setAutomaticCameraOption();
+    status.textContent='Poskušam neposredno odpreti zadnjo kamero …';
+    await startSelectedCamera();
   }
 }
 
