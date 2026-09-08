@@ -37,6 +37,7 @@ input{width:100%;padding:13px;border:1px solid #aeb9c3;border-radius:8px;font-si
 .qty button{border:0;background:#edf1f4;width:30px;height:30px}
 .qty b{min-width:36px;text-align:center}
 .del{border:0;background:#f8dfe2;color:#a31e28;width:34px;height:32px;border-radius:7px;font-weight:800}
+.toolbtn{border:1px solid #c9d2d9;background:#f3f6f8;color:#263746;border-radius:7px;padding:7px 9px;font-weight:700;font-size:12px}
 .summary{margin-top:10px;border-top:1px solid var(--line);padding-top:10px;display:flex;justify-content:space-between;font-weight:700;font-size:13px}
 .footer{position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid var(--line);padding:10px 14px calc(10px + env(safe-area-inset-bottom));display:grid;grid-template-columns:1fr 1.4fr;gap:8px;z-index:30}
 .footer button{border:0;border-radius:9px;padding:14px 8px;font-weight:800}
@@ -202,6 +203,8 @@ let torchOn = false;
 let scanLocked = false;
 let currentTrack = null;
 let currentDeviceId = null;
+let lastInputWasScan = false;
+let quantityCommitBusy = false;
 
 function save(){
   localStorage.setItem('faw_ean_qty_v3', JSON.stringify(items));
@@ -334,8 +337,8 @@ function render(){
   ? items.map((x,i)=>`
       <div class="item">
         <div>
-          <div class="ean">${x.ean}</div>
-          <div class="small">${x.supplier || 'Brez dobavitelja'}</div>
+          <div class="ean">${escapeHtml(x.ean)}</div>
+          <div class="small">${escapeHtml(x.supplier || 'Brez dobavitelja')}</div>
         </div>
         <div class="qty">
           <button onclick="changeQty(${i},-1)">−</button>
@@ -369,9 +372,9 @@ function renderHistory(){
       <div style="border-top:1px solid #edf1f4;padding:10px 0">
         <div style="display:flex;justify-content:space-between;gap:8px">
           <div>
-            <strong>${h.date}</strong>
+            <strong>${escapeHtml(h.date)}</strong>
             <div class="small">${h.items.length} artiklov • ${h.items.reduce((s,x)=>s+x.qty,0)} kos</div>
-            <div class="small">Dobavitelji: ${suppliers.join(', ')}</div>
+            <div class="small">Dobavitelji: ${escapeHtml(suppliers.join(', '))}</div>
           </div>
           <div style="display:flex;gap:5px;align-items:start">
             <button class="toolbtn" onclick="restoreHistory(${realIndex})">Odpri</button>
@@ -409,6 +412,15 @@ function safeName(s){
     .slice(0,40) || 'Dobavitelj';
 }
 
+function escapeHtml(value){
+  return String(value ?? '')
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;')
+    .replace(/'/g,'&#039;');
+}
+
 function makeWorkbook(orderItems){
   const wb=XLSX.utils.book_new();
   const grouped={};
@@ -418,6 +430,8 @@ function makeWorkbook(orderItems){
     if(!grouped[supplier]) grouped[supplier]=[];
     grouped[supplier].push(x);
   });
+
+  const usedSheetNames=new Set();
 
   Object.entries(grouped).forEach(([supplier,rowsData])=>{
     const rows=[
@@ -437,8 +451,14 @@ function makeWorkbook(orderItems){
 
     ws['!cols']=[{wch:20},{wch:12}];
 
-    let sheetName=safeName(supplier).slice(0,31);
-    if(!sheetName) sheetName='Dobavitelj';
+    const baseName=safeName(supplier).slice(0,31) || 'Dobavitelj';
+    let sheetName=baseName;
+    let suffix=2;
+    while(usedSheetNames.has(sheetName)){
+      const ending=`_${suffix++}`;
+      sheetName=baseName.slice(0,31-ending.length)+ending;
+    }
+    usedSheetNames.add(sheetName);
 
     XLSX.utils.book_append_sheet(wb,ws,sheetName);
   });
@@ -631,21 +651,7 @@ function restoreHistory(i){
 
   items=JSON.parse(JSON.stringify(h.items));
   save();
-  function setMailApiUrl(url){
-  localStorage.setItem('faw_send_api_url', String(url||'').trim());
-  toast('Mail API naslov je shranjen.');
-}
-
-const recipientSelect=document.getElementById('emailRecipientSelect');
-if(recipientSelect){
-  recipientSelect.value=savedRecipient;
-  recipientSelect.addEventListener('change',()=>{
-    savedRecipient=recipientSelect.value;
-    localStorage.setItem('faw_order_recipient',savedRecipient);
-  });
-}
-
-render();
+  render();
   toast('Naročilo iz zgodovine je odprto.');
 }
 
@@ -935,6 +941,8 @@ document.getElementById('photoInput').addEventListener('change',async e=>{
 
       if(!setScannedCode(code)){
         alert('Na fotografiji nisem našel veljavne EAN kode.');
+      }else{
+        focusQuantity();
       }
     }catch(err){
       alert('Kode na fotografiji nisem uspel prebrati. Poskusi bližje in naj bo koda ostra.');
@@ -1015,6 +1023,19 @@ document.getElementById('qty').addEventListener('blur',()=>{
   }
 });
 
+const recipientSelect=document.getElementById('emailRecipientSelect');
+if(recipientSelect){
+  recipientSelect.value=[...recipientSelect.options].some(o=>o.value===savedRecipient)
+    ? savedRecipient
+    : recipientSelect.options[0].value;
+  savedRecipient=recipientSelect.value;
+  recipientSelect.addEventListener('change',()=>{
+    savedRecipient=recipientSelect.value;
+    save();
+  });
+}
+
+render();
 
 
 </script>
