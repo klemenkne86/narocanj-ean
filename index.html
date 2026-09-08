@@ -111,10 +111,17 @@ video{display:block;width:100%;min-height:240px;max-height:62vh;object-fit:cover
 
   <section class="card">
     <h2>Pošiljanje naročila</h2>
-    <label>E-POŠTA PREJEMNIKA</label>
-    <input id="emailRecipient" type="email" autocomplete="email" placeholder="klemen.kne@domtrade.si, Info.zabnica@domtrade.si">
+
+    <label>PREJEMNIK 1</label>
+    <input id="emailRecipient1" type="email" autocomplete="email"
+           value="klemen.kne@domtrade.si">
+
+    <label style="margin-top:8px">PREJEMNIK 2</label>
+    <input id="emailRecipient2" type="email" autocomplete="email"
+           value="Info.zabnica@domtrade.si">
+
     <div class="small" style="margin-top:5px">
-      Naslov se shrani v telefonu. Pri pošiljanju izberi Gmail, Outlook ali drugo e-poštno aplikacijo.
+      Oba naslova sta že nastavljena in se shranita v telefonu.
     </div>
   </section>
 
@@ -190,7 +197,8 @@ video{display:block;width:100%;min-height:240px;max-height:62vh;object-fit:cover
 let items = JSON.parse(localStorage.getItem('faw_ean_qty_v3') || '[]');
 let supplierMap = JSON.parse(localStorage.getItem('faw_supplier_map') || '{}');
 let history = JSON.parse(localStorage.getItem('faw_order_history') || '[]');
-let savedEmail = localStorage.getItem('faw_order_email') || 'klemen.kne@domtrade.si, Info.zabnica@domtrade.si';
+let savedEmail1 = localStorage.getItem('faw_order_email_1') || 'klemen.kne@domtrade.si';
+let savedEmail2 = localStorage.getItem('faw_order_email_2') || 'Info.zabnica@domtrade.si';
 let reader = null;
 let controls = null;
 let torchOn = false;
@@ -202,7 +210,8 @@ function save(){
   localStorage.setItem('faw_ean_qty_v3', JSON.stringify(items));
   localStorage.setItem('faw_supplier_map', JSON.stringify(supplierMap));
   localStorage.setItem('faw_order_history', JSON.stringify(history));
-  localStorage.setItem('faw_order_email', savedEmail || '');
+  localStorage.setItem('faw_order_email_1', savedEmail1 || '');
+  localStorage.setItem('faw_order_email_2', savedEmail2 || '');
 }
 
 function toast(msg){
@@ -259,15 +268,14 @@ function setScannedCode(code){
   }
 
   feedback();
-
-  setTimeout(()=>{
-    const q=document.getElementById('qty');
-    q.focus();
-    q.select();
-  },150);
-
   toast('EAN skeniran. Vnesi količino in potrdi.');
   return true;
+}
+
+function focusQuantity(){
+  const q=document.getElementById('qty');
+  q.focus();
+  q.select();
 }
 
 function addItem(){
@@ -306,7 +314,7 @@ function addItem(){
   document.getElementById('ean').value='';
   document.getElementById('qty').value='1';
   document.getElementById('supplier').value='';
-  document.getElementById('supplierHint').textContent='Če je EAN že znan, se dobavitelj izpolni samodejno.';
+  document.getElementById('supplierHint').textContent='Dobavitelj ni obvezen. Če ga poznamo, se izpolni samodejno.';
   lastInputWasScan=false;
 
   toast(existing ? 'Količina povečana.' : 'Artikel dodan.');
@@ -514,12 +522,14 @@ async function saveAndShareOrder(){
     return;
   }
 
-  const email=document.getElementById('emailRecipient').value.trim();
+  const email1=document.getElementById('emailRecipient1').value.trim();
+  const email2=document.getElementById('emailRecipient2').value.trim();
+  const emails=[email1,email2].filter(Boolean);
 
-  if(email){
-    savedEmail=email;
-    localStorage.setItem('faw_order_email',email);
-  }
+  savedEmail1=email1;
+  savedEmail2=email2;
+  localStorage.setItem('faw_order_email_1',savedEmail1);
+  localStorage.setItem('faw_order_email_2',savedEmail2);
 
   // Shrani v zgodovino pred pošiljanjem.
   archiveCurrentOrder();
@@ -572,7 +582,8 @@ async function saveAndShareOrder(){
     '\\n\\nExcel datoteka je bila shranjena v telefon. Dodaj jo kot priponko temu sporočilu.'
   );
 
-  window.location.href=`mailto:${encodeURIComponent(email)}?subject=${subject}&body=${body}`;
+  const mailTo = emails.map(x=>encodeURIComponent(x)).join(',');
+  window.location.href=`mailto:${mailTo}?subject=${subject}&body=${body}`;
 }
 
 function exportXlsx(){
@@ -683,13 +694,24 @@ async function openScanner(){
       select.appendChild(opt);
     });
 
-    // Privzeto vedno izberi kamero 0 (prvo kamero na seznamu).
-    // Če uporabnik želi, jo lahko pozneje ročno spremeni.
+    // Privzeto izberi dejansko kamero z oznako "Camera 0" / "Kamera 0".
+    // Če take oznake telefon ne vrne, uporabi prvo kamero kot rezervo.
     if(select.options.length){
-      select.selectedIndex=0;
+      const opts=[...select.options];
+
+      const cameraZero =
+        opts.find(o => /(?:camera|kamera)\s*0\b/i.test(o.textContent || '')) ||
+        opts.find(o => /\b0\b.*(?:back|rear|environment|zadnja|zadaj)/i.test(o.textContent || '')) ||
+        opts.find(o => /(?:back|rear|environment|zadnja|zadaj).*\b0\b/i.test(o.textContent || ''));
+
+      if(cameraZero){
+        select.value=cameraZero.value;
+      }else{
+        select.selectedIndex=0;
+      }
     }
 
-    status.textContent='Če je slika meglena, v seznamu Kamera izberi drugo zadnjo lečo.';
+    status.textContent='Privzeto je izbrana Kamera 0. Če je slika meglena, lahko ročno izbereš drugo.';
     await startSelectedCamera();
 
   }catch(e){
@@ -741,7 +763,10 @@ async function startSelectedCamera(){
           if(validEAN(code)){
             scanLocked=true;
             setScannedCode(code);
-            closeScanner();
+
+            Promise.resolve(closeScanner()).then(()=>{
+              setTimeout(focusQuantity,120);
+            });
           }
         }
       }
@@ -938,17 +963,30 @@ document.getElementById('supplier').addEventListener('keydown',e=>{
 document.getElementById('qty').addEventListener('keydown',e=>{
   if(e.key==='Enter'){
     e.preventDefault();
+
+    // Dobavitelj NI obvezen.
+    // Potrditev količine takoj doda artikel na naročilo.
     addItem();
   }
 });
 
 
-const emailInput=document.getElementById('emailRecipient');
-if(emailInput){
-  emailInput.value=savedEmail;
-  emailInput.addEventListener('change',()=>{
-    savedEmail=emailInput.value.trim();
-    localStorage.setItem('faw_order_email',savedEmail);
+const emailInput1=document.getElementById('emailRecipient1');
+const emailInput2=document.getElementById('emailRecipient2');
+
+if(emailInput1){
+  emailInput1.value=savedEmail1;
+  emailInput1.addEventListener('change',()=>{
+    savedEmail1=emailInput1.value.trim();
+    localStorage.setItem('faw_order_email_1',savedEmail1);
+  });
+}
+
+if(emailInput2){
+  emailInput2.value=savedEmail2;
+  emailInput2.addEventListener('change',()=>{
+    savedEmail2=emailInput2.value.trim();
+    localStorage.setItem('faw_order_email_2',savedEmail2);
   });
 }
 
