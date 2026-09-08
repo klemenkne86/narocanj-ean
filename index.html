@@ -40,6 +40,17 @@ input{width:100%;padding:13px;border:1px solid #aeb9c3;border-radius:8px;font-si
 .toolbtn{border:1px solid #c9d2d9;background:#f3f6f8;color:#263746;border-radius:7px;padding:7px 9px;font-weight:700;font-size:12px}
 .fastMode{display:flex;align-items:center;gap:9px;margin-top:11px;padding:10px;border-radius:8px;background:#eef5fa;color:#263746;font-size:13px;font-weight:700}
 .fastMode input{width:20px;height:20px;margin:0;accent-color:var(--blue)}
+.mailSetup{margin-top:12px;border-top:1px solid var(--line);padding-top:10px}
+.mailSetup summary{cursor:pointer;font-weight:800;color:var(--blue)}
+.mailSetup textarea{width:100%;min-height:180px;margin-top:8px;padding:9px;border:1px solid #aeb9c3;border-radius:8px;font:12px monospace;resize:vertical}
+.startRow{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end}
+.startRow button,.catalogBtn{border:0;border-radius:9px;padding:13px 14px;background:var(--blue);color:#fff;font-weight:800}
+.lockedNote{margin-top:8px;padding:9px;border-radius:8px;background:#fff3cd;color:#735c0f;font-size:13px;font-weight:700}
+.readyNote{margin-top:8px;padding:9px;border-radius:8px;background:#e8f5e9;color:#256029;font-size:13px;font-weight:700}
+.searchResults{margin-top:8px;max-height:310px;overflow:auto;border-radius:8px}
+.searchResult{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;padding:9px;border-bottom:1px solid #edf1f4;background:#fff}
+.searchResult button{border:0;border-radius:7px;padding:8px 10px;background:var(--blue);color:#fff;font-weight:700}
+button:disabled,input:disabled{opacity:.5;cursor:not-allowed}
 .summary{margin-top:10px;border-top:1px solid var(--line);padding-top:10px;display:flex;justify-content:space-between;font-weight:700;font-size:13px}
 .footer{position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid var(--line);padding:10px 14px calc(10px + env(safe-area-inset-bottom));display:grid;grid-template-columns:1fr 1.4fr;gap:8px;z-index:30}
 .footer button{border:0;border-radius:9px;padding:14px 8px;font-weight:800}
@@ -77,9 +88,34 @@ video{display:block;width:100%;min-height:240px;max-height:62vh;object-fit:cover
     <p>Skeniraj EAN, vnesi količino in izvozi Excel za direkten uvoz v FAW.</p>
   </section>
 
+  <section class="card">
+    <h2>1. Izberi dobavitelja</h2>
+    <div class="startRow">
+      <div>
+        <label>DOBAVITELJ NAROČILA *</label>
+        <input id="orderSupplier" list="supplierList" autocomplete="off" placeholder="npr. Knauf, JUB, Murexin">
+        <datalist id="supplierList"></datalist>
+      </div>
+      <button type="button" onclick="startOrder()">ZAČNI</button>
+    </div>
+    <div id="orderLockStatus" class="lockedNote">Pred naročanjem moraš izbrati dobavitelja.</div>
+  </section>
+
+  <section class="card">
+    <h2>2. Šifrant in iskanje</h2>
+    <input id="catalogFile" type="file" accept=".xlsx,.xls,.csv" style="display:none">
+    <button id="catalogImportBtn" class="catalogBtn" type="button" onclick="document.getElementById('catalogFile').click()" disabled>UVOZI EXCEL ŠIFRANT</button>
+    <div id="catalogStatus" class="small" style="margin-top:7px">Najprej izberi dobavitelja.</div>
+    <div style="margin-top:10px">
+      <label>ISKANJE PO EAN, ŠIFRI ALI NAZIVU</label>
+      <input id="productSearch" type="search" autocomplete="off" placeholder="Vpiši EAN, šifro ali naziv …" disabled>
+      <div id="searchResults" class="searchResults"></div>
+    </div>
+  </section>
+
   <div class="cameraButtons">
-    <button class="bigbtn live" onclick="openScanner()">📷 SKENIRAJ V ŽIVO</button>
-    <button class="bigbtn photo" onclick="document.getElementById('photoInput').click()">📸 FOTOGRAFIRAJ KODO</button>
+    <button id="liveScanBtn" class="bigbtn live" onclick="openScanner()" disabled>📷 SKENIRAJ V ŽIVO</button>
+    <button id="photoScanBtn" class="bigbtn photo" onclick="document.getElementById('photoInput').click()" disabled>📸 FOTOGRAFIRAJ KODO</button>
   </div>
 
   <input id="photoInput" type="file" accept="image/*" capture="environment">
@@ -88,19 +124,19 @@ video{display:block;width:100%;min-height:240px;max-height:62vh;object-fit:cover
     <div class="form">
       <div>
         <label>EAN KODA *</label>
-        <input id="ean" inputmode="numeric" autocomplete="off" placeholder="3831234567890">
+        <input id="ean" inputmode="numeric" autocomplete="off" placeholder="3831234567890" disabled>
       </div>
       <div>
         <label>KOLIČINA *</label>
-        <input id="qty" type="number" min="1" step="1" value="1" inputmode="numeric" enterkeyhint="done" autocomplete="off">
+        <input id="qty" type="number" min="1" step="1" value="1" inputmode="numeric" enterkeyhint="done" autocomplete="off" disabled>
       </div>
     </div>
 
     <div style="margin-top:9px">
-      <label>DOBAVITELJ (neobvezno)</label>
-      <input id="supplier" autocomplete="off" placeholder="npr. Knauf, JUB, Murexin" tabindex="-1">
+      <label>DOBAVITELJ NAROČILA</label>
+      <input id="supplier" autocomplete="off" placeholder="Najprej izberi dobavitelja zgoraj" readonly tabindex="-1">
       <div class="small" id="supplierHint" style="margin-top:4px">
-        Če je EAN že znan, se dobavitelj izpolni samodejno.
+        Dobavitelj velja za celotno naročilo.
       </div>
     </div>
 
@@ -113,7 +149,7 @@ video{display:block;width:100%;min-height:240px;max-height:62vh;object-fit:cover
       <span>Hitri način: po dodajanju se znova odpre kamera</span>
     </label>
 
-    <button class="add" onclick="addItem(true)">DODAJ NA SEZNAM</button>
+    <button id="addItemBtn" class="add" onclick="addItem(true)" disabled>DODAJ NA SEZNAM</button>
   </section>
 
   <section class="card">
@@ -127,8 +163,55 @@ video{display:block;width:100%;min-height:240px;max-height:62vh;object-fit:cover
     </select>
 
     <div class="small" style="margin-top:5px">
-      Ob kliku »Shrani + pošlji« bo aplikacija uporabila izbrani naslov.
+      Pošiljatelj: <strong>klemen.kne@gmail.com</strong>
     </div>
+
+    <details class="mailSetup">
+      <summary>Enkratna nastavitev Gmail pošiljanja</summary>
+      <div style="margin-top:10px">
+        <label>URL OBJAVLJENEGA GOOGLE APPS SCRIPTA</label>
+        <input id="mailApiUrl" type="url" autocomplete="off" placeholder="https://script.google.com/macros/s/.../exec">
+      </div>
+      <div style="margin-top:9px">
+        <label>VARNOSTNI KLJUČ</label>
+        <input id="mailApiToken" type="password" autocomplete="off" placeholder="Vnesi svoj dolg skrivni ključ">
+      </div>
+      <button class="add" type="button" onclick="saveMailSettings()">SHRANI NASTAVITEV</button>
+      <div class="small" style="margin-top:9px">Spodnjo kodo kopiraj v nov projekt na script.google.com. V prvi vrstici vpiši isti varnostni ključ, nato izberi Uvedi → Nova uvedba → Spletna aplikacija, Izvajaj kot jaz in Dostop: vsi.</div>
+      <textarea id="appsScriptCode" readonly>const API_TOKEN = 'TUKAJ_VPISI_ISTI_VARNOSTNI_KLJUC';
+const ALLOWED_RECIPIENTS = [
+  'klemen.kne@domtrade.si',
+  'Info.zabnica@domtrade.si',
+  'klemen.kne@gmail.com'
+];
+
+function doPost(e) {
+  try {
+    const data = JSON.parse(e.postData.contents || '{}');
+    if (!data.token || data.token !== API_TOKEN) throw new Error('Napačen varnostni ključ.');
+    if (!ALLOWED_RECIPIENTS.includes(data.to)) throw new Error('Prejemnik ni dovoljen.');
+    if (!data.fileBase64 || !data.fileName) throw new Error('Excel priponka manjka.');
+
+    const bytes = Utilities.base64Decode(data.fileBase64);
+    const attachment = Utilities.newBlob(
+      bytes,
+      data.fileMime || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      data.fileName
+    );
+
+    GmailApp.sendEmail(data.to, data.subject || 'FAW naročilo', data.message || '', {
+      attachments: [attachment],
+      name: 'FAW naročanje'
+    });
+
+    return ContentService.createTextOutput(JSON.stringify({ok:true}))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (error) {
+    return ContentService.createTextOutput(JSON.stringify({ok:false,error:String(error)}))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}</textarea>
+    </details>
   </section>
 
   <section class="card">
@@ -151,7 +234,7 @@ video{display:block;width:100%;min-height:240px;max-height:62vh;object-fit:cover
 
 <div class="footer">
   <button class="clear" onclick="clearOrder()">POČISTI</button>
-  <button class="export" onclick="saveAndShareOrder()">SHRANI + POŠLJI NA MAIL</button>
+  <button id="sendOrderBtn" class="export" onclick="saveAndShareOrder()">SHRANI + POŠLJI NA MAIL</button>
 </div>
 
 <div id="scannerModal">
@@ -203,6 +286,7 @@ video{display:block;width:100%;min-height:240px;max-height:62vh;object-fit:cover
 let items = JSON.parse(localStorage.getItem('faw_ean_qty_v3') || '[]');
 let supplierMap = JSON.parse(localStorage.getItem('faw_supplier_map') || '{}');
 let history = JSON.parse(localStorage.getItem('faw_order_history') || '[]');
+let catalogs = JSON.parse(localStorage.getItem('faw_supplier_catalogs_v1') || '{}');
 let savedRecipient = localStorage.getItem('faw_order_recipient') || 'klemen.kne@domtrade.si';
 let reader = null;
 let controls = null;
@@ -213,6 +297,9 @@ let currentDeviceId = null;
 let lastInputWasScan = false;
 let quantityCommitBusy = false;
 let fastMode = localStorage.getItem('faw_fast_mode') !== 'false';
+let sendBusy = false;
+let activeSupplier = items.length ? String(items[0].supplier||'') : '';
+let orderStarted = Boolean(activeSupplier && items.length);
 
 function save(){
   localStorage.setItem('faw_ean_qty_v3', JSON.stringify(items));
@@ -247,6 +334,208 @@ function normalizeCode(text){
   return String(text || '').replace(/\D/g,'');
 }
 
+function normalizeHeader(value){
+  return String(value||'')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+}
+
+function catalogForActiveSupplier(){
+  return activeSupplier && catalogs[activeSupplier] ? catalogs[activeSupplier] : {};
+}
+
+function productByEAN(ean){
+  return catalogForActiveSupplier()[String(ean)] || null;
+}
+
+function updateSupplierList(){
+  const names=new Set(Object.keys(catalogs));
+  Object.values(supplierMap).forEach(name=>{
+    if(name && name!=='Brez dobavitelja') names.add(name);
+  });
+  const list=document.getElementById('supplierList');
+  list.innerHTML=[...names].sort((a,b)=>a.localeCompare(b,'sl')).map(name=>
+    `<option value="${escapeHtml(name)}"></option>`
+  ).join('');
+}
+
+function updateOrderUI(){
+  const enabled=orderStarted && Boolean(activeSupplier);
+  ['liveScanBtn','photoScanBtn','ean','qty','addItemBtn','catalogImportBtn','productSearch'].forEach(id=>{
+    const element=document.getElementById(id);
+    if(element) element.disabled=!enabled;
+  });
+
+  const status=document.getElementById('orderLockStatus');
+  const supplierInput=document.getElementById('orderSupplier');
+  const lineSupplier=document.getElementById('supplier');
+  if(enabled){
+    supplierInput.value=activeSupplier;
+    lineSupplier.value=activeSupplier;
+    status.className='readyNote';
+    status.textContent='✓ Naročilo za dobavitelja: '+activeSupplier;
+    const count=Object.keys(catalogForActiveSupplier()).length;
+    document.getElementById('catalogStatus').textContent=count
+      ? `Naložen šifrant: ${count} artiklov za ${activeSupplier}.`
+      : `Za ${activeSupplier} šifrant še ni uvožen.`;
+  }else{
+    lineSupplier.value='';
+    status.className='lockedNote';
+    status.textContent='Pred naročanjem moraš izbrati dobavitelja.';
+    document.getElementById('catalogStatus').textContent='Najprej izberi dobavitelja.';
+  }
+}
+
+function requireStartedOrder(){
+  if(orderStarted && activeSupplier) return true;
+  toast('Najprej izberi dobavitelja in pritisni ZAČNI.');
+  document.getElementById('orderSupplier').focus();
+  return false;
+}
+
+function startOrder(){
+  const name=document.getElementById('orderSupplier').value.trim();
+  if(!name){
+    toast('Vpiši dobavitelja.');
+    document.getElementById('orderSupplier').focus();
+    return;
+  }
+  if(items.length && items.some(item=>item.supplier!==name)){
+    alert('Na seznamu so že artikli drugega dobavitelja. Najprej počisti trenutno naročilo.');
+    return;
+  }
+  activeSupplier=name;
+  orderStarted=true;
+  updateSupplierList();
+  updateOrderUI();
+  document.getElementById('ean').focus();
+  toast('Začeto naročilo za '+name+'.');
+}
+
+function findCatalogColumn(headers,aliases){
+  const normalized=headers.map(normalizeHeader);
+  for(const alias of aliases){
+    const exact=normalized.indexOf(alias);
+    if(exact>=0) return exact;
+  }
+  for(const alias of aliases){
+    const partial=normalized.findIndex(value=>value.includes(alias));
+    if(partial>=0) return partial;
+  }
+  return -1;
+}
+
+function parseCatalogPrice(value){
+  if(typeof value==='number' && Number.isFinite(value)) return value;
+  let text=String(value||'').trim().replace(/\s/g,'');
+  if(!text) return null;
+  if(text.includes(',') && text.includes('.')){
+    text=text.lastIndexOf(',')>text.lastIndexOf('.')
+      ? text.replace(/\./g,'').replace(',','.')
+      : text.replace(/,/g,'');
+  }else if(text.includes(',')){
+    text=text.replace(',','.');
+  }
+  text=text.replace(/[^0-9.-]/g,'');
+  const number=Number(text);
+  return Number.isFinite(number) ? number : null;
+}
+
+async function importCatalogFile(file){
+  if(!requireStartedOrder() || !file) return;
+  if(typeof XLSX==='undefined'){
+    alert('Excel knjižnica se ni naložila.');
+    return;
+  }
+
+  const status=document.getElementById('catalogStatus');
+  status.textContent='Uvažam šifrant …';
+  try{
+    const data=await file.arrayBuffer();
+    const workbook=XLSX.read(data,{type:'array'});
+    const sheet=workbook.Sheets[workbook.SheetNames[0]];
+    const rows=XLSX.utils.sheet_to_json(sheet,{header:1,defval:'',raw:false});
+    if(!rows.length) throw new Error('Excel je prazen.');
+
+    let headerRow=-1;
+    let columns=null;
+    for(let rowIndex=0;rowIndex<Math.min(rows.length,20);rowIndex++){
+      const headers=rows[rowIndex];
+      const ean=findCatalogColumn(headers,['ean','ean koda','gtin','barcode','crtna koda']);
+      const code=findCatalogColumn(headers,['sifra artikla','artikel sifra','sifra','izdelek koda','koda artikla','sku']);
+      const name=findCatalogColumn(headers,['naziv artikla','artikel naziv','naziv','opis artikla','opis','description','izdelek']);
+      const price=findCatalogColumn(headers,['nabavna cena','prodajna cena','cena','price']);
+      const unit=findCatalogColumn(headers,['enota mere','enota','em','unit']);
+      if(ean>=0 && (code>=0 || name>=0)){
+        headerRow=rowIndex;
+        columns={ean,code,name,price,unit};
+        break;
+      }
+    }
+    if(headerRow<0){
+      throw new Error('Ne najdem stolpca EAN ter stolpca Naziv ali Šifra. Preveri naslove stolpcev.');
+    }
+
+    const imported={};
+    for(let rowIndex=headerRow+1;rowIndex<rows.length;rowIndex++){
+      const row=rows[rowIndex];
+      const ean=normalizeCode(row[columns.ean]);
+      if(!validEAN(ean)) continue;
+      const code=columns.code>=0 ? String(row[columns.code]||'').trim() : '';
+      const name=columns.name>=0 ? String(row[columns.name]||'').trim() : '';
+      const price=columns.price>=0 ? parseCatalogPrice(row[columns.price]) : null;
+      const unit=columns.unit>=0 ? String(row[columns.unit]||'').trim() : '';
+      imported[ean]={ean,code,name,price,unit,supplier:activeSupplier};
+    }
+
+    const count=Object.keys(imported).length;
+    if(!count) throw new Error('V Excelu nisem našel nobene veljavne EAN kode z 8–14 številkami.');
+    catalogs[activeSupplier]=imported;
+    try{
+      localStorage.setItem('faw_supplier_catalogs_v1',JSON.stringify(catalogs));
+    }catch(storageError){
+      delete catalogs[activeSupplier];
+      throw new Error('Šifrant je prevelik za shrambo telefona. Pošlji mi ta Excel, da prilagodim večjo shrambo.');
+    }
+
+    updateSupplierList();
+    updateOrderUI();
+    status.textContent=`✓ Uvoženih ${count} artiklov za ${activeSupplier}.`;
+    toast('Šifrant je uspešno uvožen.');
+  }catch(error){
+    status.textContent='Uvoz ni uspel: '+String(error?.message||error);
+    alert(status.textContent);
+  }
+}
+
+function searchCatalog(){
+  const query=normalizeHeader(document.getElementById('productSearch').value);
+  const box=document.getElementById('searchResults');
+  if(!query){
+    box.innerHTML='';
+    return;
+  }
+  const compact=query.replace(/\s/g,'');
+  const results=Object.values(catalogForActiveSupplier()).filter(product=>{
+    const haystack=normalizeHeader(`${product.ean} ${product.code} ${product.name}`);
+    return haystack.includes(query) || product.ean.includes(compact) || normalizeHeader(product.code).includes(query);
+  }).slice(0,30);
+
+  box.innerHTML=results.length ? results.map(product=>{
+    const price=Number.isFinite(product.price) ? ` • ${product.price.toFixed(2)} €` : '';
+    return `<div class="searchResult"><div><strong>${escapeHtml(product.name||product.code||product.ean)}</strong><div class="small">EAN: ${escapeHtml(product.ean)}${product.code ? ` • Šifra: ${escapeHtml(product.code)}` : ''}${price}</div></div><button type="button" onclick="chooseCatalogProduct('${product.ean}')">IZBERI</button></div>`;
+  }).join('') : '<div class="small" style="padding:9px">Ni zadetkov v šifrantu tega dobavitelja.</div>';
+}
+
+function chooseCatalogProduct(ean){
+  if(!requireStartedOrder()) return;
+  setScannedCode(String(ean));
+  lastInputWasScan=false;
+  document.getElementById('searchResults').innerHTML='';
+  document.getElementById('productSearch').value='';
+  focusQuantity();
+}
+
 function feedback(){
   try{
     if(navigator.vibrate) navigator.vibrate(120);
@@ -268,7 +557,7 @@ function feedback(){
 }
 
 function setScannedCode(code){
-  if(!validEAN(code)) return false;
+  if(!requireStartedOrder() || !validEAN(code)) return false;
 
   document.getElementById('ean').value=code;
   lastInputWasScan=true;
@@ -276,13 +565,12 @@ function setScannedCode(code){
   const supplier=document.getElementById('supplier');
   const hint=document.getElementById('supplierHint');
 
-  if(supplierMap[code]){
-    supplier.value=supplierMap[code];
-    hint.textContent='✓ Dobavitelj je bil izpolnjen iz shranjene povezave.';
-  }else{
-    supplier.value='';
-    hint.textContent='Dobavitelj ni obvezen. Lahko ga pustiš praznega.';
-  }
+  supplier.value=activeSupplier;
+  supplierMap[code]=activeSupplier;
+  const product=productByEAN(code);
+  hint.textContent=product
+    ? `✓ ${product.name||'Artikel'}${product.code ? ' • šifra: '+product.code : ''}`
+    : 'EAN ni v šifrantu izbranega dobavitelja; še vedno ga lahko dodaš.';
 
   feedback();
   toast('EAN skeniran. Vnesi količino in potrdi.');
@@ -296,9 +584,9 @@ function focusQuantity(){
 }
 
 function addItem(reopenScanner=false){
+  if(!requireStartedOrder()) return;
   const e=document.getElementById('ean').value.trim();
   const q=parseInt(document.getElementById('qty').value,10);
-  const s=document.getElementById('supplier').value.trim();
 
   if(!validEAN(e)){
     toast('EAN mora imeti 8–14 številk.');
@@ -310,27 +598,34 @@ function addItem(reopenScanner=false){
     return;
   }
 
-  const supplierName = s || supplierMap[e] || 'Brez dobavitelja';
-
-  if(s && s !== 'Brez dobavitelja'){
-    supplierMap[e]=s;
-  }
+  const supplierName=activeSupplier;
+  const product=productByEAN(e);
+  supplierMap[e]=supplierName;
 
   const existing=items.find(x=>x.ean===e && x.supplier===supplierName);
   if(existing){
     existing.qty+=q;
+    if(product) Object.assign(existing,{code:product.code,name:product.name,price:product.price,unit:product.unit});
   }else{
-    items.push({ean:e,qty:q,supplier:supplierName});
+    items.push({
+      ean:e,
+      qty:q,
+      supplier:supplierName,
+      code:product?.code||'',
+      name:product?.name||'',
+      price:Number.isFinite(product?.price)?product.price:null,
+      unit:product?.unit||''
+    });
   }
 
   const shouldReopen=fastMode && reopenScanner && lastInputWasScan;
 
   save();
   render();
-document.getElementById('ean').value='';
+  document.getElementById('ean').value='';
   document.getElementById('qty').value='1';
-  document.getElementById('supplier').value='';
-  document.getElementById('supplierHint').textContent='Dobavitelj ni obvezen. Če ga poznamo, se izpolni samodejno.';
+  document.getElementById('supplier').value=activeSupplier;
+  document.getElementById('supplierHint').textContent='Dobavitelj velja za celotno naročilo.';
   lastInputWasScan=false;
 
   toast(existing ? 'Količina povečana.' : 'Artikel dodan.');
@@ -358,7 +653,8 @@ function render(){
       <div class="item">
         <div>
           <div class="ean">${escapeHtml(x.ean)}</div>
-          <div class="small">${escapeHtml(x.supplier || 'Brez dobavitelja')}</div>
+          <div class="small">${escapeHtml(x.name||x.code||x.supplier||'')}</div>
+          ${x.code ? `<div class="small">Šifra: ${escapeHtml(x.code)}</div>` : ''}
         </div>
         <div class="qty">
           <button onclick="changeQty(${i},-1)">−</button>
@@ -417,10 +713,15 @@ function removeItem(i){
 }
 
 function clearOrder(){
-  if(items.length && confirm('Izbrišem celotno naročilo?')){
-    items=[];
-    save();render();
-  }
+  if(items.length && !confirm('Izbrišem celotno naročilo?')) return;
+  items=[];
+  activeSupplier='';
+  orderStarted=false;
+  document.getElementById('orderSupplier').value='';
+  document.getElementById('searchResults').innerHTML='';
+  document.getElementById('productSearch').value='';
+  save();render();
+  updateOrderUI();
 }
 
 function safeName(s){
@@ -552,7 +853,33 @@ function buildMailSummary(orderItems){
   return text;
 }
 
+function fileToBase64(file){
+  return new Promise((resolve,reject)=>{
+    const reader=new FileReader();
+    reader.onload=()=>resolve(String(reader.result||'').split(',')[1]||'');
+    reader.onerror=()=>reject(new Error('Excel datoteke ni bilo mogoče pripraviti.'));
+    reader.readAsDataURL(file);
+  });
+}
+
+function saveMailSettings(){
+  const url=document.getElementById('mailApiUrl').value.trim();
+  const token=document.getElementById('mailApiToken').value.trim();
+  if(!/^https:\/\/script\.google\.com\/macros\/s\/.+\/exec$/i.test(url)){
+    alert('Vnesi pravilen URL objavljene spletne aplikacije, ki se konča z /exec.');
+    return;
+  }
+  if(token.length<12){
+    alert('Varnostni ključ naj ima najmanj 12 znakov. Isti ključ mora biti v Google Apps Script kodi.');
+    return;
+  }
+  localStorage.setItem('faw_send_api_url',url);
+  localStorage.setItem('faw_send_api_token',token);
+  toast('Gmail pošiljanje je nastavljeno.');
+}
+
 async function saveAndShareOrder(){
+  if(sendBusy) return;
   if(!items.length){
     toast('Seznam je prazen.');
     return;
@@ -567,6 +894,15 @@ async function saveAndShareOrder(){
   savedRecipient=recipient;
   localStorage.setItem('faw_order_recipient',savedRecipient);
 
+  const SEND_API_URL=document.getElementById('mailApiUrl').value.trim();
+  const SEND_API_TOKEN=document.getElementById('mailApiToken').value.trim();
+  if(!SEND_API_URL || !SEND_API_TOKEN){
+    const setup=document.querySelector('.mailSetup');
+    if(setup) setup.open=true;
+    alert('Najprej opravi enkratno nastavitev Gmail pošiljanja.');
+    return;
+  }
+
   // Shrani v zgodovino najprej.
   archiveCurrentOrder();
   save();
@@ -577,30 +913,40 @@ async function saveAndShareOrder(){
 
   // Popolnoma avtomatsko pošiljanje zahteva backend/mail API.
   // Ko bo endpoint nastavljen, bo ta gumb poslal brez odpiranja Gmaila.
-  const SEND_API_URL = localStorage.getItem('faw_send_api_url') || '';
-
   if(SEND_API_URL){
     try{
-      const form=new FormData();
-      form.append('to',recipient);
-      form.append('subject','FAW naročilo');
-      form.append('message',summary);
-      form.append('file',file,filename);
+      sendBusy=true;
+      const sendButton=document.getElementById('sendOrderBtn');
+      sendButton.disabled=true;
+      sendButton.textContent='POŠILJAM …';
+      const fileBase64=await fileToBase64(file);
 
-      const res=await fetch(SEND_API_URL,{
+      await withTimeout(fetch(SEND_API_URL,{
         method:'POST',
-        body:form
-      });
-
-      if(!res.ok){
-        throw new Error('HTTP '+res.status);
-      }
+        mode:'no-cors',
+        headers:{'Content-Type':'text/plain;charset=utf-8'},
+        body:JSON.stringify({
+          token:SEND_API_TOKEN,
+          to:recipient,
+          subject:'FAW naročilo',
+          message:summary,
+          fileName:filename,
+          fileMime:file.type,
+          fileBase64
+        })
+      }),20000,'Pošiljanje je trajalo predolgo.');
 
       toast('Naročilo je shranjeno in poslano na '+recipient);
+      alert('Naročilo z Excel priponko je bilo poslano na '+recipient+'.');
       return;
     }catch(err){
       console.error(err);
       toast('Pošiljanje prek API ni uspelo. Excel bom shranil.');
+    }finally{
+      sendBusy=false;
+      const sendButton=document.getElementById('sendOrderBtn');
+      sendButton.disabled=false;
+      sendButton.textContent='SHRANI + POŠLJI NA MAIL';
     }
   }
 
@@ -670,8 +1016,11 @@ function restoreHistory(i){
   }
 
   items=JSON.parse(JSON.stringify(h.items));
+  activeSupplier=String(items[0]?.supplier||'');
+  orderStarted=Boolean(activeSupplier);
   save();
   render();
+  updateOrderUI();
   toast('Naročilo iz zgodovine je odprto.');
 }
 
@@ -686,6 +1035,7 @@ function clearHistory(){
 }
 
 async function openScanner(){
+  if(!requireStartedOrder()) return;
   const modal=document.getElementById('scannerModal');
   const status=document.getElementById('cameraStatus');
   const error=document.getElementById('cameraError');
@@ -1037,18 +1387,24 @@ document.getElementById('photoInput').addEventListener('change',async e=>{
   img.src=url;
 });
 
+document.getElementById('catalogFile').addEventListener('change',async event=>{
+  const file=event.target.files && event.target.files[0];
+  await importCatalogFile(file);
+  event.target.value='';
+});
+
+document.getElementById('productSearch').addEventListener('input',searchCatalog);
+
 document.getElementById('ean').addEventListener('keydown',e=>{
   if(e.key==='Enter' || e.keyCode===13){
     e.preventDefault();
 
     const code=document.getElementById('ean').value.trim();
 
-    if(supplierMap[code]){
-      document.getElementById('supplier').value=supplierMap[code];
+    if(setScannedCode(code)){
+      lastInputWasScan=false;
+      focusQuantity();
     }
-
-    lastInputWasScan=false;
-    focusQuantity();
   }
 });
 function confirmQuantityAndContinue(){
@@ -1121,6 +1477,17 @@ if(fastModeInput){
   });
 }
 
+const mailApiUrlInput=document.getElementById('mailApiUrl');
+const mailApiTokenInput=document.getElementById('mailApiToken');
+if(mailApiUrlInput){
+  mailApiUrlInput.value=localStorage.getItem('faw_send_api_url') || '';
+}
+if(mailApiTokenInput){
+  mailApiTokenInput.value=localStorage.getItem('faw_send_api_token') || '';
+}
+
+updateSupplierList();
+updateOrderUI();
 render();
 
 
