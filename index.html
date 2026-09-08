@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#2f4f6c">
+<meta name="theme-color" content="#0d4d35">
 <link rel="manifest" href="manifest.webmanifest">
 <title>FAW naročanje – EAN + količina</title>
 
@@ -85,20 +85,87 @@ video{display:block;width:100%;min-height:240px;max-height:62vh;object-fit:cover
 #torchBtn{display:none}
 .toast{position:fixed;left:50%;bottom:95px;transform:translateX(-50%);background:#1f2c37;color:#fff;padding:10px 14px;border-radius:999px;font-size:13px;display:none;z-index:200;white-space:nowrap}
 #photoInput{display:none}
-@media(max-width:520px){.form{grid-template-columns:1fr 95px}.cameraButtons{grid-template-columns:1fr 1fr}}
+/* Vizualni slog: Sam svoj mojster */
+:root{
+  --bg:#f5f7f2;--card:#ffffff;--ink:#101714;--muted:#66706a;
+  --line:#dfe5dc;--blue:#0d4d35;--green:#0d4d35;--red:#f36a24;
+  --forest:#0d4d35;--forest-dark:#073824;--lime:#d9ff43;--orange:#f36a24;
+}
+body{background:linear-gradient(180deg,#f8faf6 0,#f3f5ef 100%);font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Arial,sans-serif;color:var(--ink)}
+header{background:#fff;color:var(--ink);padding:12px 16px;border-bottom:1px solid var(--line);box-shadow:0 3px 16px rgba(7,56,36,.07);display:flex;align-items:center;justify-content:space-between;gap:12px}
+header .brand{display:flex;align-items:center;gap:10px;margin:0}
+header .brandMark{width:39px;height:39px;display:grid;place-items:center;color:var(--forest);background:#f2f7f2;border:1px solid #d9e4da;border-radius:11px}
+header .brandMark svg{width:27px;height:27px}
+header .brandText{margin:0;color:var(--ink);line-height:1.02}
+header .brandText strong{display:inline;font-size:21px;letter-spacing:-.5px}
+header .brandText span{font-size:21px;font-weight:900;color:var(--forest)}
+header .brandText small{display:block;margin-top:4px;font-size:10px;letter-spacing:1.25px;font-weight:800;color:#7b847e}
+header .headerPill{margin:0;background:var(--lime);color:#17200d;border-radius:999px;padding:8px 10px;font-size:10px;font-weight:900;letter-spacing:.5px;white-space:nowrap}
+main{max-width:760px;padding:16px 14px 126px}
+.card{border:1px solid var(--line);border-radius:18px;padding:16px;margin-bottom:13px;box-shadow:0 8px 28px rgba(7,56,36,.055)}
+.hero{position:relative;overflow:hidden;background:linear-gradient(120deg,var(--forest-dark),#12613f);border:0;color:#fff;padding:23px 19px;box-shadow:0 14px 34px rgba(7,56,36,.18)}
+.hero:after{content:"";position:absolute;width:170px;height:170px;border-radius:50%;right:-66px;top:-86px;background:rgba(217,255,67,.13)}
+.hero h2{font-size:31px;line-height:1.02;letter-spacing:-1.1px;margin-bottom:10px;max-width:430px}
+.hero p{color:#dce8e0;font-size:15px;max-width:520px}
+h2{font-size:19px;letter-spacing:-.35px}
+label{font-size:11px;letter-spacing:.45px;color:#59645e}
+input,select{border:1px solid #cfd8cf!important;border-radius:11px!important;background:#fbfcfa!important;outline:none;transition:border-color .15s,box-shadow .15s}
+input:focus,select:focus{border-color:var(--forest)!important;box-shadow:0 0 0 3px rgba(13,77,53,.11)}
+.startRow button,.catalogBtn,.add{background:var(--lime);color:#17200d;border-radius:11px;box-shadow:none}
+.startRow button{min-height:49px;padding-left:19px;padding-right:19px}
+.cameraButtons{gap:10px;margin-bottom:13px}
+.bigbtn{border-radius:14px;padding:17px 10px;box-shadow:0 7px 18px rgba(7,56,36,.10)}
+.live{background:var(--lime);color:#17200d}
+.photo{border:1px solid #cfd8cf;color:var(--forest);background:#fff}
+.fastMode{border-radius:12px;background:#f0f7ef;color:var(--forest);border:1px solid #d9e7d8}
+.fastMode input{accent-color:var(--forest)}
+.lockedNote{background:#fff2e9;color:#98431c;border:1px solid #ffd7c3;border-radius:11px}
+.readyNote{background:#edf7ec;color:#24603a;border:1px solid #cfe4ce;border-radius:11px}
+.item{padding:13px 0}
+.qty{border-color:#d4ddd3;border-radius:9px}
+.qty button{background:#eef4ec;color:var(--forest);font-weight:900}
+.del{background:#fff0e8;color:#b54818}
+.toolbtn{background:#f3f6f1;color:var(--forest);border-color:#d7dfd5}
+.searchResult{border:1px solid #e1e7df;border-radius:12px;margin-bottom:7px;padding:11px}
+.searchResult button,.reviewBtn{background:var(--forest)}
+.undoBtn{background:#fff2e9;color:#98431c}
+.saveState{color:#2c7248}
+.summary{border-color:#e3e8e1}
+.footer{background:rgba(255,255,255,.96);backdrop-filter:blur(12px);border-color:#dfe5dc;box-shadow:0 -7px 24px rgba(7,56,36,.08);padding-top:9px}
+.footer button{border-radius:12px;padding:15px 9px;font-size:14px}
+.clear{background:#fff0e8;color:#a94216}
+.export{background:var(--lime);color:#17200d}
+.scanner,.reviewBox{border-radius:20px}
+.scannerHead{background:var(--forest);padding:14px 15px}
+.scannerHead button{color:var(--forest);border-radius:9px}
+.scanLine{background:var(--lime);box-shadow:0 0 10px var(--lime)}
+.scanFrame{border-color:rgba(217,255,67,.95)}
+#cameraStatus{background:#edf7ec;border-color:#cfe4ce;color:#245d3a}
+.cameraTools button{border-color:#d4ddd3;background:#f3f6f1;color:var(--forest);border-radius:10px}
+.reviewExport{background:var(--lime);color:#17200d}.reviewSend{background:var(--forest)}
+.toast{background:var(--forest-dark)}
+@media(max-width:520px){
+  .form{grid-template-columns:1fr 95px}.cameraButtons{grid-template-columns:1fr 1fr}
+  header .headerPill{display:none}.hero h2{font-size:28px}.walkStatus{grid-template-columns:1fr}.walkActions button{flex:1}
+}
 </style>
 </head>
 <body>
 
 <header>
-  <strong>FAW NAROČANJE</strong>
-  <div>EAN + količina</div>
+  <div class="brand">
+    <span class="brandMark" aria-hidden="true">
+      <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14 16 4l12 10v14H4z"/><path d="M12 28v-9h8v9"/></svg>
+    </span>
+    <div class="brandText"><strong>FAW </strong><span>naročanje</span><small>OBHOD TRGOVINE</small></div>
+  </div>
+  <div class="headerPill">EAN + KOLIČINA</div>
 </header>
 
 <main>
-  <section class="card">
-    <h2>Hitro naročanje</h2>
-    <p>Skeniraj EAN, vnesi količino in izvozi Excel za direkten uvoz v FAW.</p>
+  <section class="card hero">
+    <h2>Skeniraj. Dodaj. Naroči.</h2>
+    <p>Hiter obhod trgovine brez zapisovanja v zvezek.</p>
   </section>
 
   <section class="card">
