@@ -38,6 +38,8 @@ input{width:100%;padding:13px;border:1px solid #aeb9c3;border-radius:8px;font-si
 .qty b{min-width:36px;text-align:center}
 .del{border:0;background:#f8dfe2;color:#a31e28;width:34px;height:32px;border-radius:7px;font-weight:800}
 .toolbtn{border:1px solid #c9d2d9;background:#f3f6f8;color:#263746;border-radius:7px;padding:7px 9px;font-weight:700;font-size:12px}
+.fastMode{display:flex;align-items:center;gap:9px;margin-top:11px;padding:10px;border-radius:8px;background:#eef5fa;color:#263746;font-size:13px;font-weight:700}
+.fastMode input{width:20px;height:20px;margin:0;accent-color:var(--blue)}
 .summary{margin-top:10px;border-top:1px solid var(--line);padding-top:10px;display:flex;justify-content:space-between;font-weight:700;font-size:13px}
 .footer{position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid var(--line);padding:10px 14px calc(10px + env(safe-area-inset-bottom));display:grid;grid-template-columns:1fr 1.4fr;gap:8px;z-index:30}
 .footer button{border:0;border-radius:9px;padding:14px 8px;font-weight:800}
@@ -105,6 +107,11 @@ video{display:block;width:100%;min-height:240px;max-height:62vh;object-fit:cover
     <div class="small" style="margin-top:10px">
       Po potrditvi količine se artikel samodejno doda in skener se ponovno odpre.
     </div>
+
+    <label class="fastMode">
+      <input id="fastMode" type="checkbox" checked>
+      <span>Hitri način: po dodajanju se znova odpre kamera</span>
+    </label>
 
     <button class="add" onclick="addItem(true)">DODAJ NA SEZNAM</button>
   </section>
@@ -205,6 +212,7 @@ let currentTrack = null;
 let currentDeviceId = null;
 let lastInputWasScan = false;
 let quantityCommitBusy = false;
+let fastMode = localStorage.getItem('faw_fast_mode') !== 'false';
 
 function save(){
   localStorage.setItem('faw_ean_qty_v3', JSON.stringify(items));
@@ -305,6 +313,8 @@ function addItem(reopenScanner=false){
     items.push({ean:e,qty:q,supplier:supplierName});
   }
 
+  const shouldReopen=fastMode && reopenScanner && lastInputWasScan;
+
   save();
   render();
 document.getElementById('ean').value='';
@@ -315,7 +325,7 @@ document.getElementById('ean').value='';
 
   toast(existing ? 'Količina povečana.' : 'Artikel dodan.');
 
-  if(reopenScanner){
+  if(shouldReopen){
     try{
       if(document.activeElement && document.activeElement.blur){
         document.activeElement.blur();
@@ -1068,6 +1078,16 @@ if(recipientSelect){
   recipientSelect.addEventListener('change',()=>{
     savedRecipient=recipientSelect.value;
     save();
+  });
+}
+
+const fastModeInput=document.getElementById('fastMode');
+if(fastModeInput){
+  fastModeInput.checked=fastMode;
+  fastModeInput.addEventListener('change',()=>{
+    fastMode=fastModeInput.checked;
+    localStorage.setItem('faw_fast_mode',String(fastMode));
+    toast(fastMode ? 'Hitri način je vklopljen.' : 'Hitri način je izklopljen.');
   });
 }
 
