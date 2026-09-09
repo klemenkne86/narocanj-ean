@@ -70,9 +70,9 @@ button:disabled,input:disabled{opacity:.5;cursor:not-allowed}
 .clear{background:#f4dfe1;color:#9e2028}.export{background:var(--green);color:#fff}
 #scannerModal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:100;padding:14px;align-items:center;justify-content:center}
 .scanner{width:min(620px,100%);background:#fff;border-radius:14px;overflow:hidden}
-.scannerHead{background:var(--blue);color:#fff;padding:11px 13px;display:flex;align-items:center;justify-content:space-between;font-weight:800}
-.scannerHead button{border:0;background:#fff;padding:7px 10px;border-radius:6px;font-weight:700}
-.scannerBody{padding:12px}
+.scannerHead{background:var(--blue);color:#fff;padding:11px 13px;display:flex;align-items:center;justify-content:center;font-weight:800}
+.scannerBody{padding:12px 12px 86px}
+.scannerClose{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom));transform:translateX(-50%);width:min(590px,calc(100% - 28px));z-index:110;border:0;border-radius:13px;padding:15px;background:#fff;color:var(--forest);box-shadow:0 8px 28px rgba(0,0,0,.3);font-size:15px;font-weight:900}
 .videoWrap{position:relative;background:#000;border-radius:10px;overflow:hidden}
 video{display:block;width:100%;min-height:240px;max-height:62vh;object-fit:cover;background:#000}
 .scanLine{position:absolute;left:6%;right:6%;top:50%;height:2px;background:#ff3344;box-shadow:0 0 8px #ff3344}
@@ -137,7 +137,6 @@ input:focus,select:focus{border-color:var(--forest)!important;box-shadow:0 0 0 3
 .export{background:var(--lime);color:#17200d}
 .scanner,.reviewBox{border-radius:20px}
 .scannerHead{background:var(--forest);padding:14px 15px}
-.scannerHead button{color:var(--forest);border-radius:9px}
 .scanLine{background:var(--lime);box-shadow:0 0 10px var(--lime)}
 .scanFrame{border-color:rgba(217,255,67,.95)}
 #cameraStatus{background:#edf7ec;border-color:#cfe4ce;color:#245d3a}
@@ -367,7 +366,6 @@ function doPost(e) {
   <div class="scanner">
     <div class="scannerHead">
       <span>Skeniranje EAN</span>
-      <button onclick="closeScanner()">Zapri</button>
     </div>
     <div class="scannerBody">
       <div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end;margin-bottom:8px">
@@ -403,6 +401,7 @@ function doPost(e) {
         <button id="torchBtn" onclick="toggleTorch()">🔦 Lučka</button>
       </div>
     </div>
+    <button class="scannerClose" type="button" onclick="closeScanner()">ZAPRI SKENER</button>
   </div>
 </div>
 
@@ -648,16 +647,20 @@ async function importCatalogFile(file){
 }
 
 function searchCatalog(){
-  const query=normalizeHeader(document.getElementById('productSearch').value);
+  const rawQuery=document.getElementById('productSearch').value;
+  const query=normalizeHeader(rawQuery);
   const box=document.getElementById('searchResults');
   if(!query){
     box.innerHTML='';
     return;
   }
   const compact=query.replace(/\s/g,'');
+  const eanSuffix=normalizeCode(rawQuery);
   const results=Object.values(catalogForActiveSupplier()).filter(product=>{
+    const productEAN=String(product.ean||'');
     const haystack=normalizeHeader(`${product.ean} ${product.code} ${product.name}`);
-    return haystack.includes(query) || product.ean.includes(compact) || normalizeHeader(product.code).includes(query);
+    const matchesEANEnd=eanSuffix.length>=6 && productEAN.endsWith(eanSuffix);
+    return matchesEANEnd || haystack.includes(query) || productEAN.includes(compact) || normalizeHeader(product.code).includes(query);
   }).slice(0,30);
 
   box.innerHTML=results.length ? results.map(product=>{
