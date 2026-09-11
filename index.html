@@ -146,6 +146,19 @@ input:focus,select:focus{border-color:var(--forest)!important;box-shadow:0 0 0 3
 .quickQty button{border:1px solid #d6e0d3;border-radius:11px;padding:12px 4px;background:#f0f7ef;color:var(--forest);font-size:14px;font-weight:900}
 .quickQty button:nth-child(-n+4){background:var(--lime);color:#17200d;border-color:var(--lime)}
 .toast{background:var(--forest-dark)}
+.modeSwitch{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:13px;padding:6px;background:#e8eee6;border:1px solid #d9e2d6;border-radius:15px}
+.modeSwitch button{border:0;border-radius:11px;padding:13px 8px;background:transparent;color:var(--forest);font-weight:900;font-size:14px}
+.modeSwitch button.active{background:var(--forest);color:#fff;box-shadow:0 5px 14px rgba(7,56,36,.18)}
+.labelIntro{background:linear-gradient(120deg,#283b31,var(--forest));color:#fff;border:0}
+.labelIntro p{color:#dce8e0}
+.labelStats{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:11px}
+.labelStat{padding:12px;border:1px solid #dce5da;border-radius:12px;background:#f7faf5;text-align:center}
+.labelStat strong{display:block;font-size:23px;color:var(--forest)}
+.labelActions{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:10px}
+.labelActions button{border:0;border-radius:12px;padding:14px 8px;font-weight:900}
+.labelExport{background:var(--lime);color:#17200d}.labelClear{background:#fff0e8;color:#a94216}
+.labelPrice{font-weight:900;color:var(--forest)}
+[hidden]{display:none!important}
 @media(max-width:520px){
   .form{grid-template-columns:1fr 95px}.cameraButtons{grid-template-columns:1fr 1fr}
   header .headerPill{display:none}.hero h2{font-size:28px}.walkStatus{grid-template-columns:1fr}.walkActions button{flex:1}
@@ -160,12 +173,20 @@ input:focus,select:focus{border-color:var(--forest)!important;box-shadow:0 0 0 3
     <span class="brandMark" aria-hidden="true">
       <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14 16 4l12 10v14H4z"/><path d="M12 28v-9h8v9"/></svg>
     </span>
-    <div class="brandText"><strong>FAW </strong><span>naročanje</span><small>OBHOD TRGOVINE</small></div>
+    <div class="brandText"><strong>FAW </strong><span id="appTitle">naročanje</span><small id="appSubtitle">OBHOD TRGOVINE</small></div>
   </div>
-  <div class="headerPill">EAN + KOLIČINA</div>
+  <div id="headerPill" class="headerPill">EAN + KOLIČINA</div>
 </header>
 
 <main>
+  <nav class="modeSwitch" aria-label="Izbira načina dela">
+    <button id="orderModeBtn" class="active" type="button" onclick="switchAppMode('order')">📦 NAROČANJE</button>
+    <button id="labelsModeBtn" type="button" onclick="switchAppMode('labels')">🏷️ CENOVKE</button>
+  </nav>
+
+  <input id="photoInput" type="file" accept="image/*" capture="environment">
+
+  <div id="orderMode">
   <section class="card hero">
     <h2>Skeniraj. Dodaj. Naroči.</h2>
     <p>Hiter obhod trgovine brez zapisovanja v zvezek.</p>
@@ -204,8 +225,6 @@ input:focus,select:focus{border-color:var(--forest)!important;box-shadow:0 0 0 3
     <button id="liveScanBtn" class="bigbtn live" onclick="openScanner()" disabled>📷 SKENIRAJ V ŽIVO</button>
     <button id="photoScanBtn" class="bigbtn photo" onclick="document.getElementById('photoInput').click()" disabled>📸 FOTOGRAFIRAJ KODO</button>
   </div>
-
-  <input id="photoInput" type="file" accept="image/*" capture="environment">
 
   <section class="card">
     <div class="form">
@@ -341,9 +360,61 @@ function doPost(e) {
     </div>
     <div id="historyList" style="margin-top:10px"></div>
   </section>
+  </div>
+
+  <div id="labelsMode" hidden>
+    <section class="card labelIntro">
+      <h2>Manjkajoče cenovke</h2>
+      <p>Skeniraj artikel in cenovka se takoj doda na ločen seznam. Ponovni sken istega artikla poveča število cenovk.</p>
+    </section>
+
+    <section class="card">
+      <h2>Šifrant za cenovke</h2>
+      <input id="labelCatalogFile" type="file" accept=".xlsx,.xls,.csv" style="display:none">
+      <button class="catalogBtn" type="button" onclick="document.getElementById('labelCatalogFile').click()">UVOZI GLAVNI ŠIFRANT</button>
+      <p id="labelCatalogStatus">Cenovke uporabljajo artikle iz vseh uvoženih šifrantov.</p>
+      <div class="labelStats">
+        <div class="labelStat"><strong id="labelCatalogCount">0</strong><span class="small">artiklov v šifrantu</span></div>
+        <div class="labelStat"><strong id="labelItemCountTop">0</strong><span class="small">izbranih cenovk</span></div>
+      </div>
+      <div style="margin-top:12px">
+        <label>ISKANJE PO EAN, ZADNJIH 6 ŠTEVILKAH, ŠIFRI ALI NAZIVU</label>
+        <input id="labelSearch" type="search" autocomplete="off" placeholder="Poišči artikel …">
+        <div id="labelSearchResults" class="searchResults"></div>
+      </div>
+    </section>
+
+    <div class="cameraButtons">
+      <button class="bigbtn live" type="button" onclick="openScanner()">📷 SKENIRAJ CENOVKO</button>
+      <button class="bigbtn photo" type="button" onclick="document.getElementById('photoInput').click()">📸 FOTOGRAFIRAJ KODO</button>
+    </div>
+
+    <section class="card">
+      <label>ROČNI VNOS EAN</label>
+      <div class="startRow">
+        <input id="labelEAN" inputmode="numeric" autocomplete="off" placeholder="3831234567890">
+        <button type="button" onclick="addManualLabel()">DODAJ</button>
+      </div>
+      <div id="labelLastAdded" class="readyNote" style="display:none"></div>
+    </section>
+
+    <section class="card">
+      <h2>Seznam za tisk cenovk</h2>
+      <div id="labelList"></div>
+      <div class="summary">
+        <span>Artiklov: <span id="labelItemCount">0</span></span>
+        <span>Cenovk skupaj: <span id="labelQtyCount">0</span></span>
+      </div>
+      <div class="labelActions">
+        <button class="labelClear" type="button" onclick="clearLabels()">POČISTI</button>
+        <button class="labelExport" type="button" onclick="exportLabelsForVasco()">IZVOZI ZA VASCO</button>
+      </div>
+      <div class="small" style="margin-top:8px">Izvoz CSV: VASCO_SIFRA, EAN in KOLICINA. Seznam se samodejno shranjuje v telefonu.</div>
+    </section>
+  </div>
 </main>
 
-<div class="footer">
+<div id="orderFooter" class="footer">
   <button class="clear" onclick="clearOrder()">POČISTI</button>
   <button id="sendOrderBtn" class="export" onclick="openOrderReview()">PREGLEJ + DOKONČAJ</button>
 </div>
@@ -365,7 +436,7 @@ function doPost(e) {
 <div id="scannerModal">
   <div class="scanner">
     <div class="scannerHead">
-      <span>Skeniranje EAN</span>
+      <span id="scannerTitle">Skeniranje EAN</span>
     </div>
     <div class="scannerBody">
       <div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end;margin-bottom:8px">
@@ -427,6 +498,9 @@ let strictCatalog = localStorage.getItem('faw_strict_catalog') !== 'false';
 let sendBusy = false;
 let activeSupplier = items.length ? String(items[0].supplier||'') : '';
 let orderStarted = Boolean(activeSupplier && items.length);
+let appMode = localStorage.getItem('faw_app_mode') === 'labels' ? 'labels' : 'order';
+let labelItems = JSON.parse(localStorage.getItem('faw_label_items_v1') || '[]');
+let labelCatalog = JSON.parse(localStorage.getItem('faw_label_catalog_v1') || '{}');
 
 function save(){
   localStorage.setItem('faw_ean_qty_v3', JSON.stringify(items));
@@ -438,6 +512,10 @@ function save(){
   }else{
     localStorage.removeItem('faw_last_add_action');
   }
+}
+
+function saveLabels(){
+  localStorage.setItem('faw_label_items_v1',JSON.stringify(labelItems));
 }
 
 function toast(msg){
@@ -478,6 +556,60 @@ function catalogForActiveSupplier(){
 
 function productByEAN(ean){
   return catalogForActiveSupplier()[String(ean)] || null;
+}
+
+function allCatalogProducts(){
+  const merged={...labelCatalog};
+  Object.values(catalogs).forEach(catalog=>{
+    Object.values(catalog||{}).forEach(product=>{
+      const ean=String(product?.ean||'');
+      if(!ean) return;
+      if(!merged[ean]){
+        merged[ean]={...product,ean};
+        return;
+      }
+      ['code','name','price','unit','pack'].forEach(key=>{
+        const oldValue=merged[ean][key];
+        const newValue=product[key];
+        if((oldValue==='' || oldValue==null) && newValue!=='' && newValue!=null){
+          merged[ean][key]=newValue;
+        }
+      });
+    });
+  });
+  return Object.values(merged);
+}
+
+function productForLabels(ean){
+  const wanted=String(ean);
+  if(labelCatalog[wanted]) return labelCatalog[wanted];
+  for(const catalog of Object.values(catalogs)){
+    if(catalog && catalog[wanted]) return catalog[wanted];
+  }
+  return null;
+}
+
+async function switchAppMode(mode){
+  appMode=mode==='labels' ? 'labels' : 'order';
+  localStorage.setItem('faw_app_mode',appMode);
+  await stopCamera();
+  document.getElementById('scannerModal').style.display='none';
+
+  const labels=appMode==='labels';
+  document.getElementById('orderMode').hidden=labels;
+  document.getElementById('labelsMode').hidden=!labels;
+  document.getElementById('orderFooter').hidden=labels;
+  document.getElementById('orderModeBtn').classList.toggle('active',!labels);
+  document.getElementById('labelsModeBtn').classList.toggle('active',labels);
+  document.getElementById('appTitle').textContent=labels ? 'cenovke' : 'naročanje';
+  document.getElementById('appSubtitle').textContent=labels ? 'MANJKAJOČE CENOVKE' : 'OBHOD TRGOVINE';
+  document.getElementById('headerPill').textContent=labels ? 'EAN + TISK' : 'EAN + KOLIČINA';
+  document.title=labels ? 'FAW cenovke' : 'FAW naročanje – EAN + količina';
+
+  if(labels){
+    updateLabelCatalogStatus();
+    renderLabels();
+  }
 }
 
 function updateSupplierList(){
@@ -638,6 +770,7 @@ async function importCatalogFile(file){
 
     updateSupplierList();
     updateOrderUI();
+    updateLabelCatalogStatus();
     status.textContent=`✓ Uvoženih ${count} artiklov za ${activeSupplier}.`;
     toast('Šifrant je uspešno uvožen.');
   }catch(error){
@@ -679,6 +812,230 @@ function chooseCatalogProduct(ean){
   focusQuantity();
 }
 
+async function importLabelCatalogFile(file){
+  if(!file) return;
+  if(typeof XLSX==='undefined'){
+    alert('Excel knjižnica se ni naložila.');
+    return;
+  }
+  const status=document.getElementById('labelCatalogStatus');
+  status.textContent='Uvažam glavni šifrant …';
+  try{
+    const data=await file.arrayBuffer();
+    const workbook=XLSX.read(data,{type:'array'});
+    const sheet=workbook.Sheets[workbook.SheetNames[0]];
+    const rows=XLSX.utils.sheet_to_json(sheet,{header:1,defval:'',raw:false});
+    if(!rows.length) throw new Error('Datoteka je prazna.');
+
+    let headerRow=-1;
+    let columns=null;
+    for(let rowIndex=0;rowIndex<Math.min(rows.length,20);rowIndex++){
+      const headers=rows[rowIndex];
+      const ean=findCatalogColumn(headers,['ean','ean koda','gtin','barcode','crtna koda']);
+      const code=findCatalogColumn(headers,['vasco sifra','sifra artikla','artikel sifra','sifra','izdelek koda','koda artikla','sku']);
+      const name=findCatalogColumn(headers,['naziv artikla','artikel naziv','naziv','opis artikla','opis','description','izdelek']);
+      const price=findCatalogColumn(headers,['maloprodajna cena','prodajna cena','cena','price']);
+      const unit=findCatalogColumn(headers,['enota mere','enota','em','unit']);
+      const pack=findCatalogColumn(headers,['kolicina v paketu','kos v paketu','pakiranje','paket','pack size','package qty']);
+      if(ean>=0 && (code>=0 || name>=0)){
+        headerRow=rowIndex;
+        columns={ean,code,name,price,unit,pack};
+        break;
+      }
+    }
+    if(headerRow<0){
+      throw new Error('Ne najdem stolpca EAN ter stolpca Šifra ali Naziv.');
+    }
+
+    const imported={};
+    for(let rowIndex=headerRow+1;rowIndex<rows.length;rowIndex++){
+      const row=rows[rowIndex];
+      const ean=normalizeCode(row[columns.ean]);
+      if(!validEAN(ean)) continue;
+      const code=columns.code>=0 ? String(row[columns.code]||'').trim() : '';
+      const name=columns.name>=0 ? String(row[columns.name]||'').trim() : '';
+      const price=columns.price>=0 ? parseCatalogPrice(row[columns.price]) : null;
+      const unit=columns.unit>=0 ? String(row[columns.unit]||'').trim() : '';
+      const packValue=columns.pack>=0 ? parseInt(parseCatalogPrice(row[columns.pack]),10) : null;
+      imported[ean]={ean,code,name,price,unit,pack:Number.isInteger(packValue)&&packValue>0?packValue:null};
+    }
+    if(!Object.keys(imported).length){
+      throw new Error('V datoteki ni veljavnih EAN kod z 8–14 številkami.');
+    }
+    labelCatalog=imported;
+    localStorage.setItem('faw_label_catalog_v1',JSON.stringify(labelCatalog));
+
+    labelItems.forEach(item=>{
+      const product=labelCatalog[item.ean];
+      if(product){
+        item.code=product.code||item.code||'';
+        item.name=product.name||item.name||'';
+        item.price=Number.isFinite(product.price)?product.price:item.price;
+      }
+    });
+    saveLabels();
+    updateLabelCatalogStatus();
+    renderLabels();
+    toast('Glavni šifrant za cenovke je uvožen.');
+  }catch(error){
+    status.textContent='Uvoz ni uspel: '+String(error?.message||error);
+    alert(status.textContent);
+  }
+}
+
+function updateLabelCatalogStatus(){
+  const count=allCatalogProducts().length;
+  document.getElementById('labelCatalogCount').textContent=count;
+  document.getElementById('labelCatalogStatus').textContent=count
+    ? `Pripravljenih je ${count} različnih artiklov iz vseh uvoženih šifrantov.`
+    : 'Šifrant še ni uvožen. EAN lahko vseeno skeniraš, Vasco šifro pa dodava po uvozu šifranta.';
+}
+
+function searchLabelCatalog(){
+  const raw=document.getElementById('labelSearch').value;
+  const query=normalizeHeader(raw);
+  const box=document.getElementById('labelSearchResults');
+  if(!query){
+    box.innerHTML='';
+    return;
+  }
+  const compact=query.replace(/\s/g,'');
+  const eanSuffix=normalizeCode(raw);
+  const results=allCatalogProducts().filter(product=>{
+    const ean=String(product.ean||'');
+    const haystack=normalizeHeader(`${ean} ${product.code||''} ${product.name||''}`);
+    return (eanSuffix.length>=6 && ean.endsWith(eanSuffix)) ||
+      haystack.includes(query) || ean.includes(compact) || normalizeHeader(product.code).includes(query);
+  }).slice(0,30);
+
+  box.innerHTML=results.length ? results.map(product=>{
+    const price=Number.isFinite(product.price) ? ` • <span class="labelPrice">${product.price.toFixed(2)} €</span>` : '';
+    return `<div class="searchResult"><div><strong>${escapeHtml(product.name||product.code||product.ean)}</strong><div class="small">EAN: ${escapeHtml(product.ean)}${product.code ? ` • Vasco šifra: ${escapeHtml(product.code)}` : ''}${price}</div></div><button type="button" onclick="chooseLabelProduct('${product.ean}')">DODAJ</button></div>`;
+  }).join('') : '<div class="small" style="padding:9px">Ni zadetkov v uvoženih šifrantih.</div>';
+}
+
+function chooseLabelProduct(ean){
+  addLabelByEAN(String(ean),false);
+  document.getElementById('labelSearch').value='';
+  document.getElementById('labelSearchResults').innerHTML='';
+}
+
+function addManualLabel(){
+  const input=document.getElementById('labelEAN');
+  const ean=normalizeCode(input.value);
+  if(addLabelByEAN(ean,false)) input.value='';
+}
+
+function addLabelByEAN(ean,fromScan=false){
+  const normalized=normalizeCode(ean);
+  if(!validEAN(normalized)){
+    toast('EAN mora imeti 8–14 številk.');
+    return false;
+  }
+  const product=productForLabels(normalized);
+  const existing=labelItems.find(item=>item.ean===normalized);
+  if(existing){
+    existing.qty+=1;
+    if(product){
+      Object.assign(existing,{
+        code:product.code||existing.code||'',
+        name:product.name||existing.name||'',
+        price:Number.isFinite(product.price)?product.price:existing.price
+      });
+    }
+  }else{
+    labelItems.push({
+      ean:normalized,
+      qty:1,
+      code:product?.code||'',
+      name:product?.name||'',
+      price:Number.isFinite(product?.price)?product.price:null
+    });
+  }
+  saveLabels();
+  renderLabels();
+  const last=document.getElementById('labelLastAdded');
+  last.style.display='block';
+  last.innerHTML=`✓ ${escapeHtml(product?.name||product?.code||normalized)}${product?.code ? ` • šifra: ${escapeHtml(product.code)}` : ''}${Number.isFinite(product?.price) ? ` • ${product.price.toFixed(2)} €` : ''}`;
+  toast(existing ? 'Število cenovk povečano.' : 'Cenovka dodana.');
+  return true;
+}
+
+function renderLabels(){
+  const list=document.getElementById('labelList');
+  list.innerHTML=labelItems.length ? labelItems.map((item,index)=>`
+    <div class="item">
+      <div>
+        <div class="ean">${escapeHtml(item.name||item.code||item.ean)}</div>
+        <div class="small">EAN: ${escapeHtml(item.ean)}${item.code ? ` • Vasco šifra: ${escapeHtml(item.code)}` : ' • ⚠ brez Vasco šifre'}</div>
+        ${Number.isFinite(item.price) ? `<div class="labelPrice">${item.price.toFixed(2)} €</div>` : ''}
+      </div>
+      <div class="qty">
+        <button type="button" onclick="changeLabelQty(${index},-1)">−</button>
+        <b>${item.qty}</b>
+        <button type="button" onclick="changeLabelQty(${index},1)">+</button>
+      </div>
+      <button class="del" type="button" onclick="removeLabel(${index})">×</button>
+    </div>
+  `).join('') : '<div class="small">Seznam cenovk je prazen.</div>';
+
+  const total=labelItems.reduce((sum,item)=>sum+item.qty,0);
+  document.getElementById('labelItemCount').textContent=labelItems.length;
+  document.getElementById('labelItemCountTop').textContent=total;
+  document.getElementById('labelQtyCount').textContent=total;
+}
+
+function changeLabelQty(index,delta){
+  const item=labelItems[index];
+  if(!item) return;
+  item.qty=Math.max(1,item.qty+delta);
+  saveLabels();
+  renderLabels();
+}
+
+function removeLabel(index){
+  labelItems.splice(index,1);
+  saveLabels();
+  renderLabels();
+}
+
+function clearLabels(){
+  if(labelItems.length && !confirm('Izbrišem celoten seznam cenovk?')) return;
+  labelItems=[];
+  saveLabels();
+  renderLabels();
+  document.getElementById('labelLastAdded').style.display='none';
+}
+
+function exportLabelsForVasco(){
+  if(!labelItems.length){
+    toast('Seznam cenovk je prazen.');
+    return;
+  }
+  const esc=value=>{
+    const text=String(value??'');
+    return /[;"\r\n]/.test(text) ? `"${text.replace(/"/g,'""')}"` : text;
+  };
+  const rows=[
+    ['VASCO_SIFRA','EAN','KOLICINA'],
+    ...labelItems.map(item=>[item.code||'',String(item.ean),Number(item.qty)])
+  ];
+  const csv='\ufeff'+rows.map(row=>row.map(esc).join(';')).join('\r\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const link=document.createElement('a');
+  const d=new Date();
+  link.href=url;
+  link.download=`cenovke_VASCO_${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  setTimeout(()=>{
+    URL.revokeObjectURL(url);
+    link.remove();
+  },500);
+  toast('Seznam cenovk izvožen za Vasco.');
+}
+
 function feedback(){
   try{
     if(navigator.vibrate) navigator.vibrate(120);
@@ -700,7 +1057,15 @@ function feedback(){
 }
 
 function setScannedCode(code){
-  if(!requireStartedOrder() || !validEAN(code)) return false;
+  if(!validEAN(code)) return false;
+
+  if(appMode==='labels'){
+    const added=addLabelByEAN(code,true);
+    if(added) feedback();
+    return added;
+  }
+
+  if(!requireStartedOrder()) return false;
 
   document.getElementById('ean').value=code;
   lastInputWasScan=true;
@@ -1321,12 +1686,13 @@ function clearHistory(){
 }
 
 async function openScanner(){
-  if(!requireStartedOrder()) return;
+  if(appMode==='order' && !requireStartedOrder()) return;
   const modal=document.getElementById('scannerModal');
   const status=document.getElementById('cameraStatus');
   const error=document.getElementById('cameraError');
 
   modal.style.display='flex';
+  document.getElementById('scannerTitle').textContent=appMode==='labels' ? 'Skeniranje cenovk' : 'Skeniranje EAN';
   error.style.display='none';
   error.textContent='';
   status.textContent='Pripravljam kamero …';
@@ -1485,11 +1851,22 @@ async function startSelectedCamera(selectBest=false){
           const code=normalizeCode(result.getText ? result.getText() : result.text);
           if(validEAN(code)){
             scanLocked=true;
-            setScannedCode(code);
+            const modeAtScan=appMode;
+            const accepted=setScannedCode(code);
 
-            Promise.resolve(closeScanner()).then(()=>{
-              setTimeout(focusQuantity,120);
-            });
+            if(accepted){
+              Promise.resolve(closeScanner()).then(()=>{
+                if(modeAtScan==='labels'){
+                  setTimeout(()=>{
+                    if(appMode==='labels') openScanner();
+                  },450);
+                }else{
+                  setTimeout(focusQuantity,120);
+                }
+              });
+            }else{
+              scanLocked=false;
+            }
           }
         }
       }
@@ -1653,7 +2030,7 @@ document.getElementById('photoInput').addEventListener('change',async e=>{
 
       if(!setScannedCode(code)){
         alert('Na fotografiji nisem našel veljavne EAN kode.');
-      }else{
+      }else if(appMode==='order'){
         focusQuantity();
       }
     }catch(err){
@@ -1680,6 +2057,20 @@ document.getElementById('catalogFile').addEventListener('change',async event=>{
 });
 
 document.getElementById('productSearch').addEventListener('input',searchCatalog);
+document.getElementById('labelSearch').addEventListener('input',searchLabelCatalog);
+
+document.getElementById('labelCatalogFile').addEventListener('change',async event=>{
+  const file=event.target.files && event.target.files[0];
+  await importLabelCatalogFile(file);
+  event.target.value='';
+});
+
+document.getElementById('labelEAN').addEventListener('keydown',event=>{
+  if(event.key==='Enter' || event.keyCode===13){
+    event.preventDefault();
+    addManualLabel();
+  }
+});
 
 document.getElementById('ean').addEventListener('keydown',e=>{
   if(e.key==='Enter' || e.keyCode===13){
@@ -1785,6 +2176,8 @@ if(mailApiTokenInput){
 updateSupplierList();
 updateOrderUI();
 render();
+renderLabels();
+switchAppMode(appMode);
 updateConnectionState();
 window.addEventListener('online',updateConnectionState);
 window.addEventListener('offline',updateConnectionState);
